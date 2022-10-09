@@ -116,23 +116,22 @@ main :: proc() {
 		// -- Game logic START --
 		if mouse_state != 0 {
 			if !is_grabbing_card {
-				for index := card_count - 1; index >= 0; index -= 1 {
-					// can use sdl.PointInRect
-					card_x := cards[card_order[index]].rect.x
-					card_y := cards[card_order[index]].rect.y
-					if (((mouse_x >= card_x) && (mouse_x < card_x + CARD_SIZE_X)) &&
-						((mouse_y >= card_y) && (mouse_y < card_y + CARD_SIZE_Y))) {
-						grabbed_card_index = card_order[index]
+				for o_index := card_count - 1; o_index >= 0; o_index -= 1 {
+					card := &cards[card_order[o_index]]
+					if sdl.PointInRect(&sdl.Point{mouse_x, mouse_y}, &card.rect) {
+						grabbed_card_index = card_order[o_index]
 						cards[grabbed_card_index].last_rect = cards[grabbed_card_index].rect
 						is_grabbing_card = true
 						was_just_grabbing_card = true // Maybe move this out?
-						grabbed_relative_x = mouse_x - card_x
-						grabbed_relative_y = mouse_y - card_y
+						
+						grabbed_relative_x = mouse_x - card.rect.x
+						grabbed_relative_y = mouse_y - card.rect.y
 						
 						// Puts the grabbed card at the top of the card_order array
 						// TODO: account for card stacks
-						temp_order := card_order[index]
-						for reshufle_index := index; reshufle_index < (card_count - 1); reshufle_index += 1 {
+						
+						temp_order := card_order[o_index]
+						for reshufle_index := o_index; reshufle_index < (card_count - 1); reshufle_index += 1 {
 							card_order[reshufle_index] = card_order[reshufle_index + 1]
 						}
 						card_order[card_count - 1] = temp_order
@@ -213,6 +212,7 @@ main :: proc() {
 							grabbed_card.rect.y = card.rect.y + NEXT_CARD_Y_OFFSET
 							
 							valid_dropoff_found = true
+							break
 						}
 					}
 				}
