@@ -67,7 +67,7 @@ main :: proc() {
 	
 	
 	cards : [256]Card 
-	card_order : [256]int 
+	draw_queue : [256]int 
 	// cards[0] = {}; // temp
 	card_count := 0
 	
@@ -91,7 +91,7 @@ main :: proc() {
 						new_card := BLANK_CARD
 						new_card.texture_index = 1
 						new_card.rect = sdl.Rect{mouse_x, mouse_y, CARD_SIZE_X, CARD_SIZE_Y}
-						card_order[card_count] = card_count
+						draw_queue[card_count] = card_count
 						cards[card_count] = new_card
 						card_count += 1
 					}
@@ -117,9 +117,9 @@ main :: proc() {
 		if mouse_state != 0 {
 			if !is_grabbing_card {
 				for o_index := card_count - 1; o_index >= 0; o_index -= 1 {
-					card := &cards[card_order[o_index]]
+					card := &cards[draw_queue[o_index]]
 					if sdl.PointInRect(&sdl.Point{mouse_x, mouse_y}, &card.rect) {
-						grabbed_card_index = card_order[o_index]
+						grabbed_card_index = draw_queue[o_index]
 						cards[grabbed_card_index].last_rect = cards[grabbed_card_index].rect
 						is_grabbing_card = true
 						was_just_grabbing_card = true // Maybe move this out?
@@ -127,15 +127,26 @@ main :: proc() {
 						grabbed_relative_x = mouse_x - card.rect.x
 						grabbed_relative_y = mouse_y - card.rect.y
 						
-						// Puts the grabbed card at the top of the card_order array
+						// Puts the grabbed card at the top of the draw_queue array
 						// TODO: account for card stacks
-						
-						temp_order := card_order[o_index]
-						for reshufle_index := o_index; reshufle_index < (card_count - 1); reshufle_index += 1 {
-							card_order[reshufle_index] = card_order[reshufle_index + 1]
+						shuffle_card_order := o_index
+						for {
+							shuffled_cards_index := draw_queue[shuffle_card_order]
+							for reshufle_index in shuffle_card_order..<card_count - 1 {
+								draw_queue[reshufle_index] = draw_queue[reshufle_index + 1]
+							}
+							draw_queue[card_count - 1] = shuffled_cards_index
+							
+							over_card := cards[shuffled_cards_index].over_index
+							if over_card != EMPTY_SPOT {
+								for search_index, order_index in draw_queue {
+									if over_card == search_index {
+										shuffle_card_order = order_index
+										break
+									}
+								}
+							} else { break }
 						}
-						card_order[card_count - 1] = temp_order
-						
 						break
 					}
 				}
@@ -251,7 +262,7 @@ main :: proc() {
 			sdl.RenderCopy(renderer, card_textures[0], nil, &base_spots[index].rect)
 		}
 		for index := 0; index < card_count; index += 1 {
-			current_card := &cards[card_order[index]]
+			current_card := &cards[draw_queue[index]]
 			sdl.RenderCopy(renderer, card_textures[current_card.texture_index], nil, &current_card.rect)
 		}
 		
