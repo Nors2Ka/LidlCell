@@ -6,14 +6,18 @@ import sdl "vendor:sdl2"
 UNIQUE_CARD_COUNT :: 11
 CARD_SIZE_X :: 60
 CARD_SIZE_Y :: 60
-NEXT_CARD_Y_OFFSET :: CARD_SIZE_Y * 0.6 // What happens here really? Auto-cast?
+NEXT_CARD_Y_OFFSET :: CARD_SIZE_Y * 0.4 // What happens here really? Auto-cast?
 EMPTY_SPOT :: -1
 
 Card :: struct {
-	texture_index: int,
+	power: int,
+	is_on_dropoff: bool,
 	is_on_base_spot: bool,
+	
 	under_index, over_index: int,
-	rect, last_rect: sdl.Rect
+	rect, last_rect: sdl.Rect,
+	
+	texture_index: int
 }
 
 BaseSpot :: struct {
@@ -21,9 +25,15 @@ BaseSpot :: struct {
 	rect: sdl.Rect
 }
 
+DropoffSpot :: struct {
+	over_index: int,
+	rect: sdl.Rect
+}
+
 BLANK_RECT :: sdl.Rect{-1, -1, -1, -1}
-BLANK_CARD :: Card{-1, false, EMPTY_SPOT, EMPTY_SPOT, BLANK_RECT, BLANK_RECT}
-BLANK_BASE_SPOT :: BaseSpot{EMPTY_SPOT, BLANK_RECT}
+BLANK_CARD :: Card{power=0, is_on_base_spot = false, is_on_dropoff = false, under_index = EMPTY_SPOT, over_index = EMPTY_SPOT, rect = BLANK_RECT, last_rect = BLANK_RECT, texture_index = -1}
+BLANK_BASE_SPOT :: BaseSpot{over_index = EMPTY_SPOT, rect = BLANK_RECT}
+BLANK_DROPOFF_SPOT :: DropoffSpot{over_index = EMPTY_SPOT, rect = BLANK_RECT}
 
 main :: proc() {
 	sdl.Init(sdl.INIT_VIDEO)
@@ -35,7 +45,7 @@ main :: proc() {
 	
 	card_surfaces : [UNIQUE_CARD_COUNT]^sdl.Surface
 	card_textures : [UNIQUE_CARD_COUNT]^sdl.Texture
-	card_surfaces[0] = sdl.LoadBMP("data\\card_back.bmp")
+	card_surfaces[0] = sdl.LoadBMP("data\\base_spot.bmp")
 	card_surfaces[1] = sdl.LoadBMP("data\\card_1.bmp")
 	card_surfaces[2] = sdl.LoadBMP("data\\card_2.bmp")
 	card_surfaces[3] = sdl.LoadBMP("data\\card_3.bmp")
@@ -50,6 +60,9 @@ main :: proc() {
 		card_textures[index] = sdl.CreateTextureFromSurface(renderer, card_surfaces[index])
 		sdl.FreeSurface(card_surfaces[index])
 	}
+	dropoff_surf := sdl.LoadBMP("data\\dropoff_spot.bmp")
+	dropoff_tex  := sdl.CreateTextureFromSurface(renderer, dropoff_surf)
+	sdl.FreeSurface(dropoff_surf)
 	// --Tech init over--
 	
 	
@@ -59,11 +72,23 @@ main :: proc() {
 	
 	base_spot_count += 1
 	base_spots[0] = BLANK_BASE_SPOT
-	base_spots[0].rect = sdl.Rect{10, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
+	base_spots[0].rect = sdl.Rect{20, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
 	
 	base_spot_count += 1
 	base_spots[1] = BLANK_BASE_SPOT
-	base_spots[1].rect = sdl.Rect{400, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
+	base_spots[1].rect = sdl.Rect{20 + 120, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
+	
+	base_spot_count += 1
+	base_spots[2] = BLANK_BASE_SPOT
+	base_spots[2].rect = sdl.Rect{20 + 240, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
+	
+	
+	dropoff_spots : [128]DropoffSpot
+	dropoff_spot_count := 0
+	
+	dropoff_spot_count += 1
+	dropoff_spots[0] = BLANK_DROPOFF_SPOT
+	dropoff_spots[0].rect = sdl.Rect{20 + 240 + 240, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
 	
 	
 	cards : [256]Card 
@@ -86,24 +111,38 @@ main :: proc() {
 		// -- Input START --
 		for sdl.PollEvent(&event) {
 			if (event.type == sdl.EventType.KEYDOWN && event.key.repeat == 0) {
-				#partial switch event.key.keysym.sym {
-					case .NUM1: {
-						new_card := BLANK_CARD
-						new_card.texture_index = 1
-						new_card.rect = sdl.Rect{mouse_x, mouse_y, CARD_SIZE_X, CARD_SIZE_Y}
-						draw_queue[card_count] = card_count
-						cards[card_count] = new_card
-						card_count += 1
-					}
-					case .NUM2: {
-					}
-					case .ESCAPE: {
-						running = false 
-					}
-					case: {
-						sdl.Log("Else")
-					}
+				base_keycode_value := int(sdl.Keycode.NUM0)
+				key_keycode := int(event.key.keysym.sym)
+				if (key_keycode >= base_keycode_value) && (key_keycode <= base_keycode_value + 10) {
+					card_type_number := key_keycode - base_keycode_value
+					
+					new_card := BLANK_CARD
+					new_card.power = card_type_number
+					new_card.texture_index = card_type_number
+					new_card.rect = sdl.Rect{mouse_x, mouse_y, CARD_SIZE_X, CARD_SIZE_Y}
+					draw_queue[card_count] = card_count
+					cards[card_count] = new_card
+					card_count += 1
 				}
+				
+				// #partial switch event.key.keysym.sym {
+				// 	case .NUM1: {
+				// 		new_card := BLANK_CARD
+				// 		new_card.texture_index = 1
+				// 		new_card.rect = sdl.Rect{mouse_x, mouse_y, CARD_SIZE_X, CARD_SIZE_Y}
+				// 		draw_queue[card_count] = card_count
+				// 		cards[card_count] = new_card
+				// 		card_count += 1
+				// 	}
+				// 	case .NUM2: {
+				// 	}
+				// 	case .ESCAPE: {
+				// 		running = false 
+				// 	}
+				// 	case: {
+				// 		sdl.Log("Else")
+				// 	}
+				// }
 			}
 			if (event.type == .QUIT) {
 				running = false
@@ -115,10 +154,10 @@ main :: proc() {
 		
 		// -- Game logic START --
 		if mouse_state != 0 {
-			if !is_grabbing_card {
+			if !is_grabbing_card { // Mouse1 pressed while not holding a card
 				for o_index := card_count - 1; o_index >= 0; o_index -= 1 {
 					card := &cards[draw_queue[o_index]]
-					if sdl.PointInRect(&sdl.Point{mouse_x, mouse_y}, &card.rect) {
+					if sdl.PointInRect(&sdl.Point{mouse_x, mouse_y}, &card.rect) && !card.is_on_dropoff {
 						grabbed_card_index = draw_queue[o_index]
 						cards[grabbed_card_index].last_rect = cards[grabbed_card_index].rect
 						is_grabbing_card = true
@@ -127,8 +166,8 @@ main :: proc() {
 						grabbed_relative_x = mouse_x - card.rect.x
 						grabbed_relative_y = mouse_y - card.rect.y
 						
-						// Puts the grabbed card at the top of the draw_queue array
-						// TODO: account for card stacks
+						// Puts the grabbed card at the top of the draw_queue array,
+						// as well as all the cards stacked on top of it.
 						shuffle_card_order := o_index
 						for {
 							shuffled_cards_index := draw_queue[shuffle_card_order]
@@ -165,13 +204,14 @@ main :: proc() {
 				}
 			}
 		} else if mouse_state == 0 {
-			if is_grabbing_card {
+			if is_grabbing_card { // Mouse1 released while holding a card
 				is_grabbing_card = false
 				valid_dropoff_found := false
 				grabbed_card := &cards[grabbed_card_index]
 				mouse_point := sdl.Point{mouse_x, mouse_y}
+				under_index_if_found: int
 				
-				for b_index := 0; b_index < base_spot_count; b_index += 1 {
+				for b_index in 0..<base_spot_count {
 					base := &base_spots[b_index]
 					is_in_rect := sdl.PointInRect(&mouse_point, &base.rect)
 					if is_in_rect == true {
@@ -203,11 +243,34 @@ main :: proc() {
 					}
 				}
 				
-				for c_index := 0; c_index < card_count; c_index += 1 {
+				for do_index in 0..<dropoff_spot_count {
+					dropoff := &dropoff_spots[do_index]
+					is_in_rect := sdl.PointInRect(&mouse_point, &dropoff.rect)
+					if is_in_rect && grabbed_card.power == 1 {
+						// I have a little bit of an announcement...
+						if grabbed_card.is_on_base_spot {
+							base_spots[grabbed_card.under_index].over_index = EMPTY_SPOT
+							grabbed_card.is_on_base_spot = false
+						} else if grabbed_card.under_index != EMPTY_SPOT {
+							cards[grabbed_card.under_index].over_index = EMPTY_SPOT
+						}
+						dropoff.over_index = grabbed_card_index
+						
+						grabbed_card.is_on_dropoff = true
+						grabbed_card.rect.x = dropoff.rect.x + 1
+						grabbed_card.rect.y = dropoff.rect.y + 1
+						
+						valid_dropoff_found = true
+						break
+					}
+				
+				}
+				
+				for c_index in 0..<card_count {
 					if c_index != grabbed_card_index {
 						card := &cards[c_index]
 						is_in_rect := sdl.PointInRect(&mouse_point, &card.rect)
-						if is_in_rect == true && card.over_index == EMPTY_SPOT {
+						if is_in_rect == true && card.over_index == EMPTY_SPOT && (grabbed_card.power + 1 == card.power || (card.is_on_dropoff && grabbed_card.power - 1 == card.power)) {
 							// Announce to the previous place that we're gone (again!)
 							if grabbed_card.is_on_base_spot {
 								base_spots[grabbed_card.under_index].over_index = EMPTY_SPOT
@@ -215,9 +278,9 @@ main :: proc() {
 							} else if grabbed_card.under_index != EMPTY_SPOT {
 								cards[grabbed_card.under_index].over_index = EMPTY_SPOT
 							}
-							
 							card.over_index = grabbed_card_index
 							
+							if card.is_on_dropoff { grabbed_card.is_on_dropoff = true }
 							grabbed_card.under_index = c_index
 							grabbed_card.rect.x = card.rect.x
 							grabbed_card.rect.y = card.rect.y + NEXT_CARD_Y_OFFSET
@@ -230,6 +293,8 @@ main :: proc() {
 				
 				if (!valid_dropoff_found) {
 					grabbed_card.rect = grabbed_card.last_rect
+				} else {
+					
 				}
 			}
 		}
@@ -261,6 +326,11 @@ main :: proc() {
 		for index := 0; index < base_spot_count; index += 1 {
 			sdl.RenderCopy(renderer, card_textures[0], nil, &base_spots[index].rect)
 		}
+		
+		for index in 0..<dropoff_spot_count {
+			sdl.RenderCopy(renderer, dropoff_tex, nil, &dropoff_spots[index].rect)
+		}
+		
 		for index := 0; index < card_count; index += 1 {
 			current_card := &cards[draw_queue[index]]
 			sdl.RenderCopy(renderer, card_textures[current_card.texture_index], nil, &current_card.rect)
