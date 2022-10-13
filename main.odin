@@ -206,87 +206,65 @@ main :: proc() {
 		} else if mouse_state == 0 {
 			if is_grabbing_card { // Mouse1 released while holding a card
 				is_grabbing_card = false
-				valid_dropoff_found := false
 				grabbed_card := &cards[grabbed_card_index]
 				mouse_point := sdl.Point{mouse_x, mouse_y}
-				under_index_if_found: int
 				
-				for b_index in 0..<base_spot_count {
-					base := &base_spots[b_index]
-					is_in_rect := sdl.PointInRect(&mouse_point, &base.rect)
-					if is_in_rect == true {
-						// Not breaking so that it's easily visible when something goes wrong.
-						if valid_dropoff_found { sdl.Log("BAD: Intersecting base spots!") }
-						
-						if base.over_index == EMPTY_SPOT {
-							// Announce to the previous place that we're gone
-							if grabbed_card.is_on_base_spot {
-								base_spots[grabbed_card.under_index].over_index = EMPTY_SPOT
-								grabbed_card.is_on_base_spot = false
-							} else if grabbed_card.under_index != EMPTY_SPOT {
-								cards[grabbed_card.under_index].over_index = EMPTY_SPOT
+				valid_dropoff_found := false
+				found_under_index: int
+				found_new_position := grabbed_card.rect
+				found_is_base_spot := false
+				found_is_dropoff := false
+				
+				search_for_dropoff: {
+					for b_index in 0..<base_spot_count {
+						base := &base_spots[b_index]
+						is_in_rect := sdl.PointInRect(&mouse_point, &base.rect)
+						if is_in_rect == true {
+							if base.over_index == EMPTY_SPOT {
+								base.over_index = grabbed_card_index
+								
+								found_is_base_spot = true
+								found_under_index = b_index
+								found_new_position.x = base.rect.x + 1
+								found_new_position.y = base.rect.y + 1
+								
+								valid_dropoff_found = true
+								break search_for_dropoff
 							}
-							
-							if grabbed_card.is_on_base_spot && grabbed_card.under_index != b_index {
-								other_base := &base_spots[grabbed_card.under_index]
-								other_base.over_index = EMPTY_SPOT
-							}
-							
-							base.over_index = grabbed_card_index
-							
-							grabbed_card.is_on_base_spot = true
-							grabbed_card.under_index = b_index
-							grabbed_card.rect.x = base.rect.x + 1
-							grabbed_card.rect.y = base.rect.y + 1
-							valid_dropoff_found = true
 						}
 					}
-				}
-				
-				for do_index in 0..<dropoff_spot_count {
-					dropoff := &dropoff_spots[do_index]
-					is_in_rect := sdl.PointInRect(&mouse_point, &dropoff.rect)
-					if is_in_rect && grabbed_card.power == 1 {
-						// I have a little bit of an announcement...
-						if grabbed_card.is_on_base_spot {
-							base_spots[grabbed_card.under_index].over_index = EMPTY_SPOT
-							grabbed_card.is_on_base_spot = false
-						} else if grabbed_card.under_index != EMPTY_SPOT {
-							cards[grabbed_card.under_index].over_index = EMPTY_SPOT
-						}
-						dropoff.over_index = grabbed_card_index
-						
-						grabbed_card.is_on_dropoff = true
-						grabbed_card.rect.x = dropoff.rect.x + 1
-						grabbed_card.rect.y = dropoff.rect.y + 1
-						
-						valid_dropoff_found = true
-						break
-					}
-				
-				}
-				
-				for c_index in 0..<card_count {
-					if c_index != grabbed_card_index {
-						card := &cards[c_index]
-						is_in_rect := sdl.PointInRect(&mouse_point, &card.rect)
-						if is_in_rect == true && card.over_index == EMPTY_SPOT && (grabbed_card.power + 1 == card.power || (card.is_on_dropoff && grabbed_card.power - 1 == card.power)) {
-							// Announce to the previous place that we're gone (again!)
-							if grabbed_card.is_on_base_spot {
-								base_spots[grabbed_card.under_index].over_index = EMPTY_SPOT
-								grabbed_card.is_on_base_spot = false
-							} else if grabbed_card.under_index != EMPTY_SPOT {
-								cards[grabbed_card.under_index].over_index = EMPTY_SPOT
-							}
-							card.over_index = grabbed_card_index
+					
+					for do_index in 0..<dropoff_spot_count {
+						dropoff := &dropoff_spots[do_index]
+						is_in_rect := sdl.PointInRect(&mouse_point, &dropoff.rect)
+						if is_in_rect && grabbed_card.power == 1 {
+							dropoff.over_index = grabbed_card_index
 							
-							if card.is_on_dropoff { grabbed_card.is_on_dropoff = true }
-							grabbed_card.under_index = c_index
-							grabbed_card.rect.x = card.rect.x
-							grabbed_card.rect.y = card.rect.y + NEXT_CARD_Y_OFFSET
+							found_is_dropoff = true
+							found_new_position.x = dropoff.rect.x + 1
+							found_new_position.y = dropoff.rect.y + 1
 							
 							valid_dropoff_found = true
-							break
+							break search_for_dropoff
+						}
+					
+					}
+					
+					for c_index in 0..<card_count {
+						if c_index != grabbed_card_index {
+							card := &cards[c_index]
+							is_in_rect := sdl.PointInRect(&mouse_point, &card.rect)
+							if is_in_rect == true && card.over_index == EMPTY_SPOT && ((!card.is_on_dropoff && grabbed_card.power + 1 == card.power) || (card.is_on_dropoff && grabbed_card.power - 1 == card.power)) {
+								card.over_index = grabbed_card_index
+								
+								if card.is_on_dropoff { found_is_dropoff = true }
+								found_under_index = c_index
+								found_new_position.x = card.rect.x
+								found_new_position.y = card.rect.y + NEXT_CARD_Y_OFFSET
+								
+								valid_dropoff_found = true
+								break search_for_dropoff
+							}
 						}
 					}
 				}
@@ -294,7 +272,18 @@ main :: proc() {
 				if (!valid_dropoff_found) {
 					grabbed_card.rect = grabbed_card.last_rect
 				} else {
+					if grabbed_card.is_on_base_spot {
+						base_spots[grabbed_card.under_index].over_index = EMPTY_SPOT
+						grabbed_card.is_on_base_spot = false
+					} else if grabbed_card.under_index != EMPTY_SPOT {
+						cards[grabbed_card.under_index].over_index = EMPTY_SPOT
+					}
 					
+					grabbed_card.rect = found_new_position
+					grabbed_card.under_index = found_under_index
+					grabbed_card.is_on_base_spot = found_is_base_spot
+					grabbed_card.is_on_dropoff = found_is_dropoff
+					assert(!(found_is_base_spot && found_is_dropoff))
 				}
 			}
 		}
