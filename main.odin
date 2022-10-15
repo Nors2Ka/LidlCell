@@ -1,3 +1,8 @@
+/* TODOs:
+Rename dropoff_spot to goal_spot.
+Remake goal_spot to be more of a thing that eats cards up.
+
+*/
 package main
 
 import "core:fmt"
@@ -7,33 +12,29 @@ UNIQUE_CARD_COUNT :: 11
 CARD_SIZE_X :: 60
 CARD_SIZE_Y :: 60
 NEXT_CARD_Y_OFFSET :: CARD_SIZE_Y * 0.4 // What happens here really? Auto-cast?
-EMPTY_SPOT :: -1
+
+CardIndex :: union { int }
 
 Card :: struct {
 	power: int,
 	is_on_dropoff: bool,
 	is_on_base_spot: bool,
 	
-	under_index, over_index: int,
+	under_index, over_index: CardIndex,
 	rect, last_rect: sdl.Rect,
 	
 	texture_index: int
 }
 
 BaseSpot :: struct {
-	over_index: int,
+	over_index: CardIndex,
 	rect: sdl.Rect
 }
 
 DropoffSpot :: struct {
-	over_index: int,
+	over_index: CardIndex,
 	rect: sdl.Rect
 }
-
-BLANK_RECT :: sdl.Rect{-1, -1, -1, -1}
-BLANK_CARD :: Card{power=0, is_on_base_spot = false, is_on_dropoff = false, under_index = EMPTY_SPOT, over_index = EMPTY_SPOT, rect = BLANK_RECT, last_rect = BLANK_RECT, texture_index = -1}
-BLANK_BASE_SPOT :: BaseSpot{over_index = EMPTY_SPOT, rect = BLANK_RECT}
-BLANK_DROPOFF_SPOT :: DropoffSpot{over_index = EMPTY_SPOT, rect = BLANK_RECT}
 
 main :: proc() {
 	sdl.Init(sdl.INIT_VIDEO)
@@ -71,15 +72,12 @@ main :: proc() {
 	base_spot_count := 0
 	
 	base_spot_count += 1
-	base_spots[0] = BLANK_BASE_SPOT
 	base_spots[0].rect = sdl.Rect{20, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
 	
 	base_spot_count += 1
-	base_spots[1] = BLANK_BASE_SPOT
 	base_spots[1].rect = sdl.Rect{20 + 120, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
 	
 	base_spot_count += 1
-	base_spots[2] = BLANK_BASE_SPOT
 	base_spots[2].rect = sdl.Rect{20 + 240, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
 	
 	
@@ -87,13 +85,11 @@ main :: proc() {
 	dropoff_spot_count := 0
 	
 	dropoff_spot_count += 1
-	dropoff_spots[0] = BLANK_DROPOFF_SPOT
 	dropoff_spots[0].rect = sdl.Rect{20 + 240 + 240, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
 	
 	
 	cards : [256]Card 
 	draw_queue : [256]int 
-	// cards[0] = {}; // temp
 	card_count := 0
 	
 	mouse_x, mouse_y : i32 = 0, 0
@@ -101,7 +97,7 @@ main :: proc() {
 	
 	is_grabbing_card := false
 	was_just_grabbing_card := false
-	grabbed_card_index := EMPTY_SPOT
+	grabbed_card_index := 0
 	grabbed_relative_x, grabbed_relative_y : i32 = 0, 0
 	
 	
@@ -111,12 +107,12 @@ main :: proc() {
 		// -- Input START --
 		for sdl.PollEvent(&event) {
 			if (event.type == sdl.EventType.KEYDOWN && event.key.repeat == 0) {
-				base_keycode_value := int(sdl.Keycode.NUM0)
+				base_keycode_value := int(sdl.Keycode.NUM1)
 				key_keycode := int(event.key.keysym.sym)
-				if (key_keycode >= base_keycode_value) && (key_keycode <= base_keycode_value + 10) {
-					card_type_number := key_keycode - base_keycode_value
+				if (key_keycode >= base_keycode_value) && (key_keycode <= base_keycode_value + 9) {
+					card_type_number := key_keycode - base_keycode_value + 1
 					
-					new_card := BLANK_CARD
+					new_card : Card
 					new_card.power = card_type_number
 					new_card.texture_index = card_type_number
 					new_card.rect = sdl.Rect{mouse_x, mouse_y, CARD_SIZE_X, CARD_SIZE_Y}
@@ -176,8 +172,8 @@ main :: proc() {
 							}
 							draw_queue[card_count - 1] = shuffled_cards_index
 							
-							over_card := cards[shuffled_cards_index].over_index
-							if over_card != EMPTY_SPOT {
+							over_card, over_card_exists := cards[shuffled_cards_index].over_index.(int)
+							if over_card_exists {
 								for search_index, order_index in draw_queue {
 									if over_card == search_index {
 										shuffle_card_order = order_index
@@ -220,7 +216,7 @@ main :: proc() {
 						base := &base_spots[b_index]
 						is_in_rect := sdl.PointInRect(&mouse_point, &base.rect)
 						if is_in_rect == true {
-							if base.over_index == EMPTY_SPOT {
+							if base.over_index == nil {
 								base.over_index = grabbed_card_index
 								
 								found_is_base_spot = true
@@ -254,7 +250,7 @@ main :: proc() {
 						if c_index != grabbed_card_index {
 							card := &cards[c_index]
 							is_in_rect := sdl.PointInRect(&mouse_point, &card.rect)
-							if is_in_rect == true && card.over_index == EMPTY_SPOT && ((!card.is_on_dropoff && grabbed_card.power + 1 == card.power) || (card.is_on_dropoff && grabbed_card.power - 1 == card.power)) {
+							if is_in_rect == true && card.over_index == nil && ((!card.is_on_dropoff && grabbed_card.power + 1 == card.power) || (card.is_on_dropoff && grabbed_card.power - 1 == card.power)) {
 								card.over_index = grabbed_card_index
 								
 								if card.is_on_dropoff { found_is_dropoff = true }
@@ -269,14 +265,12 @@ main :: proc() {
 					}
 				}
 				
-				if (!valid_dropoff_found) {
-					grabbed_card.rect = grabbed_card.last_rect
-				} else {
+				if valid_dropoff_found {
 					if grabbed_card.is_on_base_spot {
-						base_spots[grabbed_card.under_index].over_index = EMPTY_SPOT
+						base_spots[grabbed_card.under_index.(int)].over_index = nil
 						grabbed_card.is_on_base_spot = false
-					} else if grabbed_card.under_index != EMPTY_SPOT {
-						cards[grabbed_card.under_index].over_index = EMPTY_SPOT
+					} else if grabbed_card.under_index != nil {
+						cards[grabbed_card.under_index.(int)].over_index = nil
 					}
 					
 					grabbed_card.rect = found_new_position
@@ -284,18 +278,20 @@ main :: proc() {
 					grabbed_card.is_on_base_spot = found_is_base_spot
 					grabbed_card.is_on_dropoff = found_is_dropoff
 					assert(!(found_is_base_spot && found_is_dropoff))
+				} else {
+					grabbed_card.rect = grabbed_card.last_rect
 				}
 			}
 		}
 		if was_just_grabbing_card {
 			grabbed_card := &cards[grabbed_card_index]
-			if grabbed_card.over_index != EMPTY_SPOT {
-				over_card := &cards[grabbed_card.over_index]
+			if grabbed_card.over_index != nil {
+				over_card := &cards[grabbed_card.over_index.(int)]
 				over_card.rect.x = grabbed_card.rect.x
 				over_card.rect.y = grabbed_card.rect.y + NEXT_CARD_Y_OFFSET
 				prev_card := over_card
-				for over_card.over_index != EMPTY_SPOT {
-					over_card = &cards[prev_card.over_index]
+				for over_card.over_index != nil {
+					over_card = &cards[prev_card.over_index.(int)]
 					over_card.rect.x = prev_card.rect.x
 					over_card.rect.y = prev_card.rect.y + NEXT_CARD_Y_OFFSET
 					prev_card = over_card
