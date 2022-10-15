@@ -17,7 +17,7 @@ CardIndex :: union { int }
 
 Card :: struct {
 	power: int,
-	is_on_dropoff: bool,
+	is_on_goal: bool,
 	is_on_base_spot: bool,
 	
 	under_index, over_index: CardIndex,
@@ -31,8 +31,9 @@ BaseSpot :: struct {
 	rect: sdl.Rect
 }
 
-DropoffSpot :: struct {
+GoalSpot :: struct {
 	over_index: CardIndex,
+	held_power: int,
 	rect: sdl.Rect
 }
 
@@ -81,11 +82,11 @@ main :: proc() {
 	base_spots[2].rect = sdl.Rect{20 + 240, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
 	
 	
-	dropoff_spots : [128]DropoffSpot
-	dropoff_spot_count := 0
+	goal_spots : [128]GoalSpot
+	goal_spot_count := 0
 	
-	dropoff_spot_count += 1
-	dropoff_spots[0].rect = sdl.Rect{20 + 240 + 240, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
+	goal_spot_count += 1
+	goal_spots[0].rect = sdl.Rect{20 + 240 + 240, 10, CARD_SIZE_X + 2, CARD_SIZE_Y + 2}
 	
 	
 	cards : [256]Card 
@@ -153,7 +154,7 @@ main :: proc() {
 			if !is_grabbing_card { // Mouse1 pressed while not holding a card
 				for o_index := card_count - 1; o_index >= 0; o_index -= 1 {
 					card := &cards[draw_queue[o_index]]
-					if sdl.PointInRect(&sdl.Point{mouse_x, mouse_y}, &card.rect) && !card.is_on_dropoff {
+					if sdl.PointInRect(&sdl.Point{mouse_x, mouse_y}, &card.rect) && !card.is_on_goal {
 						grabbed_card_index = draw_queue[o_index]
 						cards[grabbed_card_index].last_rect = cards[grabbed_card_index].rect
 						is_grabbing_card = true
@@ -209,36 +210,36 @@ main :: proc() {
 				found_under_index: int
 				found_new_position := grabbed_card.rect
 				found_is_base_spot := false
-				found_is_dropoff := false
+				found_is_goal := false
 				
 				search_for_dropoff: {
 					for b_index in 0..<base_spot_count {
 						base := &base_spots[b_index]
 						is_in_rect := sdl.PointInRect(&mouse_point, &base.rect)
-						if is_in_rect == true {
-							if base.over_index == nil {
-								base.over_index = grabbed_card_index
-								
-								found_is_base_spot = true
-								found_under_index = b_index
-								found_new_position.x = base.rect.x + 1
-								found_new_position.y = base.rect.y + 1
-								
-								valid_dropoff_found = true
-								break search_for_dropoff
-							}
+						if is_in_rect == true && base.over_index == nil {
+							base.over_index = grabbed_card_index
+							
+							found_is_base_spot = true
+							found_under_index = b_index
+							found_new_position.x = base.rect.x + 1
+							found_new_position.y = base.rect.y + 1
+							
+							valid_dropoff_found = true
+							break search_for_dropoff
 						}
 					}
 					
-					for do_index in 0..<dropoff_spot_count {
-						dropoff := &dropoff_spots[do_index]
-						is_in_rect := sdl.PointInRect(&mouse_point, &dropoff.rect)
-						if is_in_rect && grabbed_card.power == 1 {
-							dropoff.over_index = grabbed_card_index
+					for g_index in 0..<goal_spot_count {
+						goal := &goal_spots[g_index]
+						is_in_rect := sdl.PointInRect(&mouse_point, &goal.rect)
+						if is_in_rect && goal.held_power + 1 == grabbed_card.power && grabbed_card.over_index == nil {
+							goal.over_index = grabbed_card_index
+							goal.held_power = grabbed_card.power
+							// goal.power += 1
 							
-							found_is_dropoff = true
-							found_new_position.x = dropoff.rect.x + 1
-							found_new_position.y = dropoff.rect.y + 1
+							found_is_goal = true
+							found_new_position.x = goal.rect.x + 1
+							found_new_position.y = goal.rect.y + 1
 							
 							valid_dropoff_found = true
 							break search_for_dropoff
@@ -249,11 +250,12 @@ main :: proc() {
 					for c_index in 0..<card_count {
 						if c_index != grabbed_card_index {
 							card := &cards[c_index]
+							if card.is_on_goal || card.over_index != nil do continue
 							is_in_rect := sdl.PointInRect(&mouse_point, &card.rect)
-							if is_in_rect == true && card.over_index == nil && ((!card.is_on_dropoff && grabbed_card.power + 1 == card.power) || (card.is_on_dropoff && grabbed_card.power - 1 == card.power)) {
+							if is_in_rect == true && grabbed_card.power + 1 == card.power {
 								card.over_index = grabbed_card_index
 								
-								if card.is_on_dropoff { found_is_dropoff = true }
+								if card.is_on_goal { found_is_goal = true }
 								found_under_index = c_index
 								found_new_position.x = card.rect.x
 								found_new_position.y = card.rect.y + NEXT_CARD_Y_OFFSET
@@ -276,8 +278,8 @@ main :: proc() {
 					grabbed_card.rect = found_new_position
 					grabbed_card.under_index = found_under_index
 					grabbed_card.is_on_base_spot = found_is_base_spot
-					grabbed_card.is_on_dropoff = found_is_dropoff
-					assert(!(found_is_base_spot && found_is_dropoff))
+					grabbed_card.is_on_goal = found_is_goal
+					assert(!(found_is_base_spot && found_is_goal))
 				} else {
 					grabbed_card.rect = grabbed_card.last_rect
 				}
@@ -312,8 +314,8 @@ main :: proc() {
 			sdl.RenderCopy(renderer, card_textures[0], nil, &base_spots[index].rect)
 		}
 		
-		for index in 0..<dropoff_spot_count {
-			sdl.RenderCopy(renderer, dropoff_tex, nil, &dropoff_spots[index].rect)
+		for index in 0..<goal_spot_count {
+			sdl.RenderCopy(renderer, dropoff_tex, nil, &goal_spots[index].rect)
 		}
 		
 		for index := 0; index < card_count; index += 1 {
