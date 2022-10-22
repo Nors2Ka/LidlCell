@@ -1,11 +1,7 @@
-/* TODOs:
-Rename dropoff_spot to goal_spot.
-Remake goal_spot to be more of a thing that eats cards up.
-
-*/
 package main
 
 import "core:fmt"
+import "core:strings"
 import sdl "vendor:sdl2"
 
 UNIQUE_CARD_COUNT :: 11
@@ -13,10 +9,28 @@ CARD_SIZE_X :: 60
 CARD_SIZE_Y :: 60
 NEXT_CARD_Y_OFFSET :: CARD_SIZE_Y * 0.4 // What happens here really? Auto-cast?
 
+CardPowers :: enum u8{
+	ace,
+	one, two, three, four, five, six, seven, eight, nine, ten,
+	jack, queen, king,
+}
+
+// CardNames :: []string{
+// 	"ace",
+// 	"1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+// 	"jack", "queen", "king",
+// }
+
+CardSuits :: enum u8{
+	spades, clubs, diamonds, hearts
+}
+
 CardIndex :: union { int }
 
 Card :: struct {
-	power: int,
+	power: CardPowers,
+	suit: CardSuits,
+	
 	is_on_goal: bool,
 	is_on_base_spot: bool,
 	
@@ -41,9 +55,36 @@ main :: proc() {
 	sdl.Init(sdl.INIT_VIDEO)
 	
 	// window_flags : sdl.WindowFlags
-	window := sdl.CreateWindow("Title", sdl.WINDOWPOS_CENTERED, sdl.WINDOWPOS_CENTERED, 800, 640, sdl.WindowFlags{})
+	window := sdl.CreateWindow("Title", sdl.WINDOWPOS_CENTERED, sdl.WINDOWPOS_CENTERED, 1680, 1050, sdl.WindowFlags{})
 	renderer := sdl.CreateRenderer(window, -1, sdl.RENDERER_PRESENTVSYNC | sdl.RENDERER_ACCELERATED)
 	
+	card_surface_template := sdl.LoadBMP("data\\card_face_template.bmp")
+	template_renderer     := sdl.CreateSoftwareRenderer(card_surface_template)
+	
+	top_number_pos    := sdl.Point{195, 20}
+	top_suit_pos      := sdl.Point{195, 65}
+	bottom_number_pos := sdl.Point{20,  295}
+	bottom_suit_pos   := sdl.Point{20,  250}
+	tex_diameter  :i32 = 35
+	
+	base_file_path := "data\\"
+	new_card_textures : [56]^sdl.Texture
+	for card_suit, suit_index in CardSuits {
+		card_suit_name := strings.clone_to_cstring(fmt.tprintf("%ssuit_%s.bmp", base_file_path, card_suit), context.temp_allocator)
+		suit_source_tex := sdl.CreateTextureFromSurface(template_renderer, sdl.LoadBMP(card_suit_name))
+		for card_power, power_index in CardPowers {
+			card_power_name := strings.clone_to_cstring(fmt.tprintf("%spower_%s.bmp", base_file_path, card_power), context.temp_allocator)
+			card_source_tex := sdl.CreateTextureFromSurface(template_renderer, sdl.LoadBMP(card_power_name))
+			sdl.RenderCopy  (template_renderer, card_source_tex, nil, &sdl.Rect{top_number_pos.x,    top_number_pos.y,    tex_diameter, tex_diameter})
+			sdl.RenderCopyEx(template_renderer, card_source_tex, nil, &sdl.Rect{bottom_number_pos.x, bottom_number_pos.y, tex_diameter, tex_diameter}, 180, nil, nil)
+			
+			sdl.RenderCopy  (template_renderer, suit_source_tex, nil, &sdl.Rect{top_suit_pos.x,    top_suit_pos.y,    tex_diameter, tex_diameter})
+			sdl.RenderCopyEx(template_renderer, suit_source_tex, nil, &sdl.Rect{bottom_suit_pos.x, bottom_suit_pos.y, tex_diameter, tex_diameter}, 180, nil, nil)
+			
+			fmt.printf("power_index: %v; suit_index: %v\n", power_index, suit_index)
+			new_card_textures[power_index + (13 * suit_index)] = sdl.CreateTextureFromSurface(renderer, card_surface_template)
+		}
+	}
 	
 	card_surfaces : [UNIQUE_CARD_COUNT]^sdl.Surface
 	card_textures : [UNIQUE_CARD_COUNT]^sdl.Texture
@@ -101,6 +142,7 @@ main :: proc() {
 	grabbed_card_index := 0
 	grabbed_relative_x, grabbed_relative_y : i32 = 0, 0
 	
+	card_in_question := 0 // TEMP
 	
 	event : sdl.Event
 	running : sdl.bool = true
@@ -114,7 +156,7 @@ main :: proc() {
 					card_type_number := key_keycode - base_keycode_value + 1
 					
 					new_card : Card
-					new_card.power = card_type_number
+					new_card.power = CardPowers(card_type_number)
 					new_card.texture_index = card_type_number
 					new_card.rect = sdl.Rect{mouse_x, mouse_y, CARD_SIZE_X, CARD_SIZE_Y}
 					draw_queue[card_count] = card_count
@@ -232,9 +274,9 @@ main :: proc() {
 					for g_index in 0..<goal_spot_count {
 						goal := &goal_spots[g_index]
 						is_in_rect := sdl.PointInRect(&mouse_point, &goal.rect)
-						if is_in_rect && goal.held_power + 1 == grabbed_card.power && grabbed_card.over_index == nil {
+						if is_in_rect && goal.held_power + 1 == int(grabbed_card.power) && grabbed_card.over_index == nil {
 							goal.over_index = grabbed_card_index
-							goal.held_power = grabbed_card.power
+							goal.held_power = int(grabbed_card.power)
 							// goal.power += 1
 							
 							found_is_goal = true
@@ -252,7 +294,7 @@ main :: proc() {
 							card := &cards[c_index]
 							if card.is_on_goal || card.over_index != nil do continue
 							is_in_rect := sdl.PointInRect(&mouse_point, &card.rect)
-							if is_in_rect == true && grabbed_card.power + 1 == card.power {
+							if is_in_rect == true && int(grabbed_card.power) + 1 == int(card.power) {
 								card.over_index = grabbed_card_index
 								
 								if card.is_on_goal { found_is_goal = true }
@@ -323,7 +365,10 @@ main :: proc() {
 			sdl.RenderCopy(renderer, card_textures[current_card.texture_index], nil, &current_card.rect)
 		}
 		
-		
+		sdl.RenderCopy(renderer, new_card_textures[card_in_question], nil, &sdl.Rect{00*10, 50, card_surface_template.w, card_surface_template.h})
+		card_in_question = (card_in_question + 1) % 52
+		sdl.Delay(125)
+		// sdl.RenderCopy(renderer, number_2_texture, nil, &sdl.Rect{550, 50, card_surface_template.w, card_surface_template.h})
 		// sdl.RenderDrawLine(renderer, 20, 20, mouse_x, mouse_y);
 		
 		sdl.RenderPresent(renderer)

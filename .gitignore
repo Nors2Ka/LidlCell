@@ -1,4 +1,4 @@
 *.sublime*
 bin/
-data/
+data/creation_artifacts
 *.rdbg
