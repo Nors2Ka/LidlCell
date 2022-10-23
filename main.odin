@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:strings"
 import sdl "vendor:sdl2"
 
-NEXT_CARD_Y_OFFSET :: 0.4 // What happens here really? Auto-cast?
+NEXT_CARD_Y_OFFSET :: 0.1 // What happens here really? Auto-cast?
 
 CARD_POWER_COUNT :: 14
 CARD_SUIT_COUNT  :: 4
@@ -48,6 +48,7 @@ BaseSpot :: struct {
 GoalSpot :: struct {
 	over_index: CardIndex,
 	held_power: int,
+	held_suit: CardSuits,
 	rect: sdl.Rect
 }
 
@@ -114,7 +115,6 @@ main :: proc() {
 			new_card_textures[to_card_index(card_power, card_suit)] = out_texture
 		}
 	}
-	sdl.SetRenderDrawBlendMode(renderer, sdl.BlendMode.BLEND)
 	sdl.SetRenderTarget(renderer, nil)
 	
 	base_spot_texture := sdl.CreateTextureFromSurface(renderer, sdl.LoadBMP("data\\new_base_spot.bmp"))
@@ -164,17 +164,6 @@ main :: proc() {
 			if (event.type == sdl.EventType.KEYDOWN && event.key.repeat == 0) {
 				base_keycode_value := int(sdl.Keycode.NUM1)
 				key_keycode := int(event.key.keysym.sym)
-				/*if (key_keycode >= base_keycode_value) && (key_keycode <= base_keycode_value + 9) {
-					card_type_number := key_keycode - base_keycode_value + 1
-					
-					new_card : Card
-					new_card.power = CardPowers(card_type_number)
-					new_card.texture_index = card_type_number
-					new_card.rect = sdl.Rect{mouse_x, mouse_y, CARD_SIZE_X, CARD_SIZE_Y}
-					draw_queue[card_count] = card_count
-					cards[card_count] = new_card
-					card_count += 1
-				}*/
 				
 				#partial switch event.key.keysym.sym {
 					case .SPACE: {
@@ -311,9 +300,11 @@ main :: proc() {
 						goal := &goal_spots[g_index]
 						is_in_rect := sdl.PointInRect(&mouse_point, &goal.rect)
 						if is_in_rect && grabbed_card.over_index == nil && ((goal.over_index == nil && grabbed_card.power == .ace) || (goal.over_index != nil && goal.held_power + 1 == int(grabbed_card.power))) {
+							if goal.over_index == nil { goal.held_suit = grabbed_card.suit }
+							else if goal.held_suit != grabbed_card.suit {continue}
+							
 							goal.over_index = grabbed_card_index
 							goal.held_power = int(grabbed_card.power)
-							// goal.power += 1
 							
 							found_is_goal = true
 							found_new_position.x = goal.rect.x
@@ -329,7 +320,7 @@ main :: proc() {
 					for c_index in 0..<card_count {
 						if c_index != grabbed_card_index {
 							card := &cards[c_index]
-							if card.is_on_goal || card.over_index != nil do continue
+							if card.is_on_goal || card.over_index != nil {continue}
 							is_in_rect := sdl.PointInRect(&mouse_point, &card.rect)
 							if is_in_rect == true && int(grabbed_card.power) + 1 == int(card.power) {
 								card.over_index = grabbed_card_index
@@ -409,6 +400,7 @@ main :: proc() {
 		}
 		
 		sdl.RenderPresent(renderer)
+		// -- Render END --
 	}
 	
 	sdl.Quit()
