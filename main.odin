@@ -9,6 +9,9 @@ CARD_SIZE_X :: 60
 CARD_SIZE_Y :: 60
 NEXT_CARD_Y_OFFSET :: CARD_SIZE_Y * 0.4 // What happens here really? Auto-cast?
 
+CARD_POWER_COUNT :: 14
+CARD_SUIT_COUNT  :: 4
+
 CardPowers :: enum u8{
 	ace,
 	one, two, three, four, five, six, seven, eight, nine, ten,
@@ -51,6 +54,16 @@ GoalSpot :: struct {
 	rect: sdl.Rect
 }
 
+to_card_index :: proc(power: CardPowers, suit: CardSuits) -> int {
+	return int(power) + (CARD_POWER_COUNT * int(suit))
+}
+
+wrap_range :: proc(value: int, range: int) -> int {
+	out := value % range
+	if out < 0 {out = range + out}
+	return out
+}
+
 main :: proc() {
 	sdl.Init(sdl.INIT_VIDEO)
 	
@@ -59,32 +72,61 @@ main :: proc() {
 	renderer := sdl.CreateRenderer(window, -1, sdl.RENDERER_PRESENTVSYNC | sdl.RENDERER_ACCELERATED)
 	
 	card_surface_template := sdl.LoadBMP("data\\card_face_template.bmp")
-	template_renderer     := sdl.CreateSoftwareRenderer(card_surface_template)
+	card_texture_template := sdl.CreateTextureFromSurface(renderer, card_surface_template)
+	template_size : struct {w: i32, h: i32} = ---
+	sdl.QueryTexture(card_texture_template, nil, nil, &template_size.w, &template_size.h)
+	// pixel_format : u32
+	// sdl.QueryTexture(card_texture_template, &pixel_format, nil, nil, nil)
+	// fmt.println(sdl.GetPixelFormatName(pixel_format))
+	// template_renderer     := sdl.CreateSoftwareRenderer(card_surface_template)
 	
 	top_number_pos    := sdl.Point{195, 20}
 	top_suit_pos      := sdl.Point{195, 65}
 	bottom_number_pos := sdl.Point{20,  295}
 	bottom_suit_pos   := sdl.Point{20,  250}
-	tex_diameter  :i32 = 35
+	tex_diameter      :i32= 35
 	
 	base_file_path := "data\\"
 	new_card_textures : [56]^sdl.Texture
-	for card_suit, suit_index in CardSuits {
+	suit_textures  := make(map[CardSuits]^sdl.Texture)
+	power_textures := make(map[CardPowers]^sdl.Texture)
+	// Freeing surface and texture memory saves nothing, as far as I'm concerned, better to leave this clean.
+	for card_suit in CardSuits {
 		card_suit_name := strings.clone_to_cstring(fmt.tprintf("%ssuit_%s.bmp", base_file_path, card_suit), context.temp_allocator)
-		suit_source_tex := sdl.CreateTextureFromSurface(template_renderer, sdl.LoadBMP(card_suit_name))
-		for card_power, power_index in CardPowers {
-			card_power_name := strings.clone_to_cstring(fmt.tprintf("%spower_%s.bmp", base_file_path, card_power), context.temp_allocator)
-			card_source_tex := sdl.CreateTextureFromSurface(template_renderer, sdl.LoadBMP(card_power_name))
-			sdl.RenderCopy  (template_renderer, card_source_tex, nil, &sdl.Rect{top_number_pos.x,    top_number_pos.y,    tex_diameter, tex_diameter})
-			sdl.RenderCopyEx(template_renderer, card_source_tex, nil, &sdl.Rect{bottom_number_pos.x, bottom_number_pos.y, tex_diameter, tex_diameter}, 180, nil, nil)
+		card_suit_source_tex := sdl.CreateTextureFromSurface(renderer, sdl.LoadBMP(card_suit_name))
+		suit_textures[card_suit] = card_suit_source_tex
+	}
+	for card_power in CardPowers {
+		card_power_name := strings.clone_to_cstring(fmt.tprintf("%spower_%s.bmp", base_file_path, card_power), context.temp_allocator)
+		card_power_source_tex := sdl.CreateTextureFromSurface(renderer, sdl.LoadBMP(card_power_name))
+		power_textures[card_power] = card_power_source_tex
+	}
+	
+	for card_suit in CardSuits {
+		for card_power in CardPowers {
+			out_texture := sdl.CreateTexture(renderer, u32(sdl.PixelFormatEnum.ARGB8888), sdl.TextureAccess.TARGET, template_size.w, template_size.h)
+			sdl.SetRenderTarget(renderer, out_texture)
 			
-			sdl.RenderCopy  (template_renderer, suit_source_tex, nil, &sdl.Rect{top_suit_pos.x,    top_suit_pos.y,    tex_diameter, tex_diameter})
-			sdl.RenderCopyEx(template_renderer, suit_source_tex, nil, &sdl.Rect{bottom_suit_pos.x, bottom_suit_pos.y, tex_diameter, tex_diameter}, 180, nil, nil)
+			sdl.SetRenderDrawBlendMode(renderer, sdl.BlendMode.BLEND)
+			sdl.SetTextureBlendMode(out_texture, sdl.BlendMode.BLEND)
+			sdl.SetRenderDrawColor(renderer, 0, 0, 0, 0)
+			sdl.RenderFillRect(renderer, nil)
+			// sdl.SetRenderDrawBlendMode(renderer, sdl.BlendMode.BLEND)
 			
-			fmt.printf("power_index: %v; suit_index: %v\n", power_index, suit_index)
-			new_card_textures[power_index + (13 * suit_index)] = sdl.CreateTextureFromSurface(renderer, card_surface_template)
+			sdl.RenderCopy(renderer, card_texture_template, nil, nil)
+			
+			sdl.RenderCopy  (renderer, power_textures[card_power], nil, &sdl.Rect{top_number_pos.x,    top_number_pos.y,    tex_diameter, tex_diameter})
+			sdl.RenderCopyEx(renderer, power_textures[card_power], nil, &sdl.Rect{bottom_number_pos.x, bottom_number_pos.y, tex_diameter, tex_diameter}, 180, nil, nil)
+			
+			sdl.RenderCopy  (renderer, suit_textures[card_suit], nil, &sdl.Rect{top_suit_pos.x,    top_suit_pos.y,    tex_diameter, tex_diameter})
+			sdl.RenderCopyEx(renderer, suit_textures[card_suit], nil, &sdl.Rect{bottom_suit_pos.x, bottom_suit_pos.y, tex_diameter, tex_diameter}, 180, nil, nil)
+
+			new_card_textures[to_card_index(card_power, card_suit)] = out_texture
 		}
 	}
+	sdl.SetRenderDrawBlendMode(renderer, sdl.BlendMode.BLEND)
+	sdl.SetRenderTarget(renderer, nil)
+	
 	
 	card_surfaces : [UNIQUE_CARD_COUNT]^sdl.Surface
 	card_textures : [UNIQUE_CARD_COUNT]^sdl.Texture
@@ -142,7 +184,7 @@ main :: proc() {
 	grabbed_card_index := 0
 	grabbed_relative_x, grabbed_relative_y : i32 = 0, 0
 	
-	card_in_question := 0 // TEMP
+	card_creation_selection : struct {power: CardPowers, suit: CardSuits}
 	
 	event : sdl.Event
 	running : sdl.bool = true
@@ -164,24 +206,26 @@ main :: proc() {
 					card_count += 1
 				}
 				
-				// #partial switch event.key.keysym.sym {
-				// 	case .NUM1: {
-				// 		new_card := BLANK_CARD
-				// 		new_card.texture_index = 1
-				// 		new_card.rect = sdl.Rect{mouse_x, mouse_y, CARD_SIZE_X, CARD_SIZE_Y}
-				// 		draw_queue[card_count] = card_count
-				// 		cards[card_count] = new_card
-				// 		card_count += 1
-				// 	}
-				// 	case .NUM2: {
-				// 	}
-				// 	case .ESCAPE: {
-				// 		running = false 
-				// 	}
-				// 	case: {
-				// 		sdl.Log("Else")
-				// 	}
-				// }
+				#partial switch event.key.keysym.sym {
+					case .UP: {
+						card_creation_selection.power = CardPowers(wrap_range(int(card_creation_selection.power) + 1, CARD_POWER_COUNT))
+					}
+					case .DOWN: {
+						card_creation_selection.power = CardPowers(wrap_range(int(card_creation_selection.power) - 1, CARD_POWER_COUNT))
+					}
+					case .RIGHT: {
+						card_creation_selection.suit = CardSuits(wrap_range(int(card_creation_selection.suit) + 1, CARD_SUIT_COUNT))
+					}
+					case .LEFT: {
+						card_creation_selection.suit = CardSuits(wrap_range(int(card_creation_selection.suit) - 1, CARD_SUIT_COUNT))
+					}
+					case .ESCAPE: {
+						running = false 
+					}
+					case: {
+						sdl.Log("Else")
+					}
+				}
 			}
 			if (event.type == .QUIT) {
 				running = false
@@ -350,7 +394,7 @@ main :: proc() {
 		// -- Render --
 		sdl.SetRenderDrawColor(renderer, 30, 120, 0, sdl.ALPHA_OPAQUE)
 		sdl.RenderClear(renderer)
-		// sdl.SetRenderDrawColor(renderer, 255, 255, 255, sdl.ALPHA_OPAQUE);
+		
 		
 		for index := 0; index < base_spot_count; index += 1 {
 			sdl.RenderCopy(renderer, card_textures[0], nil, &base_spots[index].rect)
@@ -365,11 +409,12 @@ main :: proc() {
 			sdl.RenderCopy(renderer, card_textures[current_card.texture_index], nil, &current_card.rect)
 		}
 		
-		sdl.RenderCopy(renderer, new_card_textures[card_in_question], nil, &sdl.Rect{00*10, 50, card_surface_template.w, card_surface_template.h})
-		card_in_question = (card_in_question + 1) % 52
-		sdl.Delay(125)
-		// sdl.RenderCopy(renderer, number_2_texture, nil, &sdl.Rect{550, 50, card_surface_template.w, card_surface_template.h})
-		// sdl.RenderDrawLine(renderer, 20, 20, mouse_x, mouse_y);
+		sdl.RenderCopy(renderer, new_card_textures[to_card_index(card_creation_selection.power, card_creation_selection.suit)], nil, &sdl.Rect{00*10, 50, card_surface_template.w, card_surface_template.h})
+		
+		
+		
+		sdl.RenderCopy(renderer, power_textures[card_creation_selection.power], nil, &sdl.Rect{0,  0, tex_diameter, tex_diameter})
+		sdl.RenderCopy(renderer, suit_textures[card_creation_selection.suit],   nil, &sdl.Rect{35, 0, tex_diameter, tex_diameter})
 		
 		sdl.RenderPresent(renderer)
 	}
