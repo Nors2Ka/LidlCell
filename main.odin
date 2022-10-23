@@ -134,10 +134,12 @@ main :: proc() {
 	
 	
 	goal_spots : [128]GoalSpot
-	goal_spot_count := 0
+	goal_spot_count := 4
 	
-	goal_spot_count += 1
-	goal_spots[0].rect = sdl.Rect{base_spots[1].rect.x + 60 + card_size.w, 40, card_size.w, card_size.h}
+	goal_spots[0].rect = sdl.Rect{600, 40, card_size.w, card_size.h}
+	goal_spots[1].rect = sdl.Rect{goal_spots[0].rect.x + 10 + card_size.w, 40, card_size.w, card_size.h}
+	goal_spots[2].rect = sdl.Rect{goal_spots[1].rect.x + 10 + card_size.w, 40, card_size.w, card_size.h}
+	goal_spots[3].rect = sdl.Rect{goal_spots[2].rect.x + 10 + card_size.w, 40, card_size.w, card_size.h}
 	
 	
 	cards : [256]Card 
