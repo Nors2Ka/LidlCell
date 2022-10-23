@@ -73,6 +73,7 @@ main :: proc() {
 	
 	card_surface_template := sdl.LoadBMP("data\\card_face_template.bmp")
 	card_texture_template := sdl.CreateTextureFromSurface(renderer, card_surface_template)
+	sdl.SetTextureBlendMode(card_texture_template, sdl.BlendMode.NONE)
 	template_size : struct {w: i32, h: i32} = ---
 	sdl.QueryTexture(card_texture_template, nil, nil, &template_size.w, &template_size.h)
 	// pixel_format : u32
@@ -106,12 +107,7 @@ main :: proc() {
 		for card_power in CardPowers {
 			out_texture := sdl.CreateTexture(renderer, u32(sdl.PixelFormatEnum.ARGB8888), sdl.TextureAccess.TARGET, template_size.w, template_size.h)
 			sdl.SetRenderTarget(renderer, out_texture)
-			
-			sdl.SetRenderDrawBlendMode(renderer, sdl.BlendMode.BLEND)
 			sdl.SetTextureBlendMode(out_texture, sdl.BlendMode.BLEND)
-			sdl.SetRenderDrawColor(renderer, 0, 0, 0, 0)
-			sdl.RenderFillRect(renderer, nil)
-			// sdl.SetRenderDrawBlendMode(renderer, sdl.BlendMode.BLEND)
 			
 			sdl.RenderCopy(renderer, card_texture_template, nil, nil)
 			
