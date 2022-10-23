@@ -1,10 +1,11 @@
 package main
 
 import "core:fmt"
+import "core:math/rand"
 import "core:strings"
 import sdl "vendor:sdl2"
 
-NEXT_CARD_Y_OFFSET :: 0.1 // What happens here really? Auto-cast?
+NEXT_CARD_Y_OFFSET :: 0.15 // What happens here really? Auto-cast?
 
 CARD_POWER_COUNT :: 14
 CARD_SUIT_COUNT  :: 4
@@ -56,11 +57,18 @@ to_card_index :: proc(power: CardPowers, suit: CardSuits) -> int {
 	return int(power) + (CARD_POWER_COUNT * int(suit))
 }
 
-wrap_range :: proc(value: int, range: int) -> int {
-	out := value % range
-	if out < 0 {out = range + out}
-	return out
+from_card_index :: proc(value: int) -> (CardPowers, CardSuits) {
+	power := value % CARD_POWER_COUNT
+	suit  := value / CARD_POWER_COUNT
+	return CardPowers(power), CardSuits(suit)
 }
+
+// This is just %%
+// wrap_range :: proc(value: int, range: int) -> int {
+// 	out := value % range
+// 	if out < 0 {out = range + out}
+// 	return out
+// }
 
 main :: proc() {
 	sdl.Init(sdl.INIT_VIDEO)
@@ -76,11 +84,11 @@ main :: proc() {
 	card_size : struct {w: i32, h: i32} = ---
 	sdl.QueryTexture(card_texture_template, nil, nil, &card_size.w, &card_size.h)
 	
-	top_number_pos    := sdl.Point{80, 10}
-	top_suit_pos      := sdl.Point{80, 55}
-	bottom_number_pos := sdl.Point{10, 130}
-	bottom_suit_pos   := sdl.Point{10, 85}
-	tex_diameter      :i32= 35
+	symbol_size       :i32= 35
+	top_number_pos    := sdl.Point{85, 0}
+	top_suit_pos      := sdl.Point{85, 35}
+	bottom_number_pos := sdl.Point{card_size.w - top_number_pos.x - symbol_size, card_size.h - top_number_pos.y - symbol_size}
+	bottom_suit_pos   := sdl.Point{card_size.w - top_suit_pos.x - symbol_size, card_size.h - top_suit_pos.y - symbol_size}
 	
 	base_file_path := "data\\"
 	new_card_textures : [56]^sdl.Texture
@@ -106,11 +114,11 @@ main :: proc() {
 			
 			sdl.RenderCopy(renderer, card_texture_template, nil, nil)
 			
-			sdl.RenderCopy  (renderer, power_textures[card_power], nil, &sdl.Rect{top_number_pos.x,    top_number_pos.y,    tex_diameter, tex_diameter})
-			sdl.RenderCopyEx(renderer, power_textures[card_power], nil, &sdl.Rect{bottom_number_pos.x, bottom_number_pos.y, tex_diameter, tex_diameter}, 180, nil, nil)
+			sdl.RenderCopy  (renderer, power_textures[card_power], nil, &sdl.Rect{top_number_pos.x,    top_number_pos.y,    symbol_size, symbol_size})
+			sdl.RenderCopyEx(renderer, power_textures[card_power], nil, &sdl.Rect{bottom_number_pos.x, bottom_number_pos.y, symbol_size, symbol_size}, 180, nil, nil)
 			
-			sdl.RenderCopy  (renderer, suit_textures[card_suit], nil, &sdl.Rect{top_suit_pos.x,    top_suit_pos.y,    tex_diameter, tex_diameter})
-			sdl.RenderCopyEx(renderer, suit_textures[card_suit], nil, &sdl.Rect{bottom_suit_pos.x, bottom_suit_pos.y, tex_diameter, tex_diameter}, 180, nil, nil)
+			sdl.RenderCopy  (renderer, suit_textures[card_suit], nil, &sdl.Rect{top_suit_pos.x,    top_suit_pos.y,    symbol_size, symbol_size})
+			sdl.RenderCopyEx(renderer, suit_textures[card_suit], nil, &sdl.Rect{bottom_suit_pos.x, bottom_suit_pos.y, symbol_size, symbol_size}, 180, nil, nil)
 
 			new_card_textures[to_card_index(card_power, card_suit)] = out_texture
 		}
@@ -124,19 +132,26 @@ main :: proc() {
 	
 	// --Game init--
 	base_spots : [128]BaseSpot
-	base_spot_count := 0
+	base_spot_count := 11
 	
-	base_spot_count += 1
-	base_spots[0].rect = sdl.Rect{20, 40, card_size.w, card_size.h}
+	base_spots[0].rect = sdl.Rect{20, 250, card_size.w, card_size.h}
+	base_spots[1].rect = sdl.Rect{base_spots[0].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
+	base_spots[2].rect = sdl.Rect{base_spots[1].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
+	base_spots[3].rect = sdl.Rect{base_spots[2].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
+	base_spots[4].rect = sdl.Rect{base_spots[3].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
+	base_spots[5].rect = sdl.Rect{base_spots[4].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
 	
-	base_spot_count += 1
-	base_spots[1].rect = sdl.Rect{20 + 40 + card_size.w, 40, card_size.w, card_size.h}
+	base_spots[6].rect  = sdl.Rect{20, 40, card_size.w, card_size.h}
+	base_spots[7].rect  = sdl.Rect{base_spots[6].rect.x + 10 + card_size.w, base_spots[6].rect.y, card_size.w, card_size.h}
+	base_spots[8].rect  = sdl.Rect{base_spots[7].rect.x + 10 + card_size.w, base_spots[6].rect.y, card_size.w, card_size.h}
+	base_spots[9].rect  = sdl.Rect{base_spots[8].rect.x + 10 + card_size.w, base_spots[6].rect.y, card_size.w, card_size.h}
+	base_spots[10].rect = sdl.Rect{base_spots[9].rect.x + 10 + card_size.w, base_spots[6].rect.y, card_size.w, card_size.h}
 	
 	
 	goal_spots : [128]GoalSpot
 	goal_spot_count := 4
 	
-	goal_spots[0].rect = sdl.Rect{600, 40, card_size.w, card_size.h}
+	goal_spots[0].rect = sdl.Rect{700, 40, card_size.w, card_size.h}
 	goal_spots[1].rect = sdl.Rect{goal_spots[0].rect.x + 10 + card_size.w, 40, card_size.w, card_size.h}
 	goal_spots[2].rect = sdl.Rect{goal_spots[1].rect.x + 10 + card_size.w, 40, card_size.w, card_size.h}
 	goal_spots[3].rect = sdl.Rect{goal_spots[2].rect.x + 10 + card_size.w, 40, card_size.w, card_size.h}
@@ -157,6 +172,52 @@ main :: proc() {
 	grabbed_relative_x, grabbed_relative_y : i32 = 0, 0
 	
 	card_creation_selection : struct {power: CardPowers, suit: CardSuits}
+	
+	// -- Board init --
+	
+	// card_count = 52
+	order_shuffle : [56]int
+	for _, index in order_shuffle { order_shuffle[index] = index }
+	rand.shuffle(order_shuffle[:])
+	rand.shuffle(order_shuffle[:])
+	rand.shuffle(order_shuffle[:])
+	rand.shuffle(order_shuffle[:])
+	rand.shuffle(order_shuffle[:])
+	for shuffle, index in order_shuffle {
+		new_card : Card
+		new_card.power, new_card.suit = from_card_index(shuffle)
+		new_card.texture_index = shuffle
+		
+		// Really need to yoink this out to a function
+		target_base_spot := index % 6
+		base := &base_spots[target_base_spot]
+		if (base.over_index == nil) {
+			new_card.rect.x = base.rect.x
+			new_card.rect.y = base.rect.y
+			
+			new_card.under_index = target_base_spot
+			new_card.is_on_base_spot = true
+			base.over_index = card_count
+		} else {
+			next_index := base.over_index
+			for {
+				next_card := &cards[next_index.(int)]
+				new_card.under_index = next_index.(int)
+				if next_index = next_card.over_index; next_index != nil {continue}
+				next_card.over_index = card_count
+				new_card.rect.x = next_card.rect.x
+				new_card.rect.y = next_card.rect.y + stacked_card_offset
+				break;
+			}
+		}
+		new_card.rect.w = card_size.w
+		new_card.rect.h = card_size.h
+		// new_card.rect = sdl.Rect{1600 - i32(index * 40), 100, card_size.w, card_size.h}
+		draw_queue[card_count] = card_count
+		cards[card_count] = new_card
+		card_count += 1
+	}
+	
 	
 	event : sdl.Event
 	running : sdl.bool = true
@@ -180,16 +241,16 @@ main :: proc() {
 					}
 					
 					case .UP: {
-						card_creation_selection.power = CardPowers(wrap_range(int(card_creation_selection.power) + 1, CARD_POWER_COUNT))
+						card_creation_selection.power = CardPowers((int(card_creation_selection.power) + 1) %% CARD_POWER_COUNT)
 					}
 					case .DOWN: {
-						card_creation_selection.power = CardPowers(wrap_range(int(card_creation_selection.power) - 1, CARD_POWER_COUNT))
+						card_creation_selection.power = CardPowers((int(card_creation_selection.power) - 1) %% CARD_POWER_COUNT)
 					}
 					case .RIGHT: {
-						card_creation_selection.suit = CardSuits(wrap_range(int(card_creation_selection.suit) + 1, CARD_SUIT_COUNT))
+						card_creation_selection.suit = CardSuits((int(card_creation_selection.suit) + 1) %% CARD_SUIT_COUNT)
 					}
 					case .LEFT: {
-						card_creation_selection.suit = CardSuits(wrap_range(int(card_creation_selection.suit) - 1, CARD_SUIT_COUNT))
+						card_creation_selection.suit = CardSuits((int(card_creation_selection.suit) - 1) %% CARD_SUIT_COUNT)
 					}
 					case .R: {
 						card_count = 0
@@ -218,10 +279,13 @@ main :: proc() {
 		
 		// -- Game logic START --
 		if mouse_state != 0 {
-			if !is_grabbing_card { // Mouse1 pressed while not holding a card
+			if !is_grabbing_card { // Mouse1 pressed while NOT holding a card
 				for o_index := card_count - 1; o_index >= 0; o_index -= 1 {
 					card := &cards[draw_queue[o_index]]
 					if sdl.PointInRect(&sdl.Point{mouse_x, mouse_y}, &card.rect) && !card.is_on_goal {
+						
+						
+						
 						grabbed_card_index = draw_queue[o_index]
 						cards[grabbed_card_index].last_rect = cards[grabbed_card_index].rect
 						is_grabbing_card = true
@@ -258,7 +322,7 @@ main :: proc() {
 			if is_grabbing_card {
 				grabbed_card := &cards[grabbed_card_index]
 				// Relative to when first grabbed or fixed position?
-				when true {
+				when false {
 					grabbed_card.rect.x = mouse_x - (card_size.w / 2)
 					grabbed_card.rect.y = mouse_y - (card_size.h / 5)
 				}
@@ -302,7 +366,9 @@ main :: proc() {
 						goal := &goal_spots[g_index]
 						is_in_rect := sdl.PointInRect(&mouse_point, &goal.rect)
 						if is_in_rect && grabbed_card.over_index == nil && ((goal.over_index == nil && grabbed_card.power == .ace) || (goal.over_index != nil && goal.held_power + 1 == int(grabbed_card.power))) {
-							if goal.over_index == nil { goal.held_suit = grabbed_card.suit }
+							if goal.over_index == nil { 
+								goal.held_suit = grabbed_card.suit
+							}
 							else if goal.held_suit != grabbed_card.suit {continue}
 							
 							goal.over_index = grabbed_card_index
@@ -382,8 +448,8 @@ main :: proc() {
 		sdl.RenderClear(renderer)
 		
 		// Selection
-		sdl.RenderCopy(renderer, power_textures[card_creation_selection.power], nil, &sdl.Rect{0,  0, tex_diameter, tex_diameter})
-		sdl.RenderCopy(renderer, suit_textures[card_creation_selection.suit],   nil, &sdl.Rect{35, 0, tex_diameter, tex_diameter})
+		sdl.RenderCopy(renderer, power_textures[card_creation_selection.power], nil, &sdl.Rect{0,  0, symbol_size, symbol_size})
+		sdl.RenderCopy(renderer, suit_textures[card_creation_selection.suit],   nil, &sdl.Rect{35, 0, symbol_size, symbol_size})
 		
 		// Base Spots
 		for index := 0; index < base_spot_count; index += 1 {
