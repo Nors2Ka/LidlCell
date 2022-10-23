@@ -76,10 +76,10 @@ main :: proc() {
 	card_size : struct {w: i32, h: i32} = ---
 	sdl.QueryTexture(card_texture_template, nil, nil, &card_size.w, &card_size.h)
 	
-	top_number_pos    := sdl.Point{195, 20}
-	top_suit_pos      := sdl.Point{195, 65}
-	bottom_number_pos := sdl.Point{20,  295}
-	bottom_suit_pos   := sdl.Point{20,  250}
+	top_number_pos    := sdl.Point{80, 10}
+	top_suit_pos      := sdl.Point{80, 55}
+	bottom_number_pos := sdl.Point{10, 130}
+	bottom_suit_pos   := sdl.Point{10, 85}
 	tex_diameter      :i32= 35
 	
 	base_file_path := "data\\"
