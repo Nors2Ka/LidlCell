@@ -23,7 +23,7 @@ CardPowers :: enum u8{
 // }
 
 CardSuits :: enum u8{
-	spades, clubs, diamonds, hearts
+	spades, clubs, diamonds, hearts,
 }
 
 CardIndex :: union { int }
@@ -38,19 +38,19 @@ Card :: struct {
 	under_index, over_index: CardIndex,
 	rect, last_rect: sdl.Rect,
 	
-	texture_index: int
+	texture_index: int,
 }
 
 BaseSpot :: struct {
 	over_index: CardIndex,
-	rect: sdl.Rect
+	rect: sdl.Rect,
 }
 
 GoalSpot :: struct {
 	over_index: CardIndex,
 	held_power: int,
 	held_suit: CardSuits,
-	rect: sdl.Rect
+	rect: sdl.Rect,
 }
 
 to_card_index :: proc(power: CardPowers, suit: CardSuits) -> int {
@@ -63,7 +63,7 @@ from_card_index :: proc(value: int) -> (CardPowers, CardSuits) {
 	return CardPowers(power), CardSuits(suit)
 }
 
-// This is just %%
+// This is just '%%' operator
 // wrap_range :: proc(value: int, range: int) -> int {
 // 	out := value % range
 // 	if out < 0 {out = range + out}
@@ -79,8 +79,8 @@ main :: proc() {
 	
 	card_surface_template := sdl.LoadBMP("data\\card_face_template.bmp")
 	card_texture_template := sdl.CreateTextureFromSurface(renderer, card_surface_template)
-	
 	sdl.SetTextureBlendMode(card_texture_template, sdl.BlendMode.NONE)
+	
 	card_size : struct {w: i32, h: i32} = ---
 	sdl.QueryTexture(card_texture_template, nil, nil, &card_size.w, &card_size.h)
 	
@@ -102,7 +102,14 @@ main :: proc() {
 	}
 	for card_power in CardPowers {
 		card_power_name := strings.clone_to_cstring(fmt.tprintf("%spower_%s.bmp", base_file_path, card_power), context.temp_allocator)
-		card_power_source_tex := sdl.CreateTextureFromSurface(renderer, sdl.LoadBMP(card_power_name))
+		card_power_surf := sdl.LoadBMP(card_power_name)
+		pixels := ([^]u32)(card_power_surf.pixels)[:(card_power_surf.w * card_power_surf.h)]
+		for _, idx in pixels {
+			pixels[idx] = pixels[idx] | 0b1111_1111_1111_1111_1111_1111
+			// fmt.printf("%v ", pixels[idx] >> 24)
+		}
+		card_power_source_tex := sdl.CreateTextureFromSurface(renderer, card_power_surf)
+		sdl.SetTextureColorMod(card_power_source_tex, 0, 0, 0)
 		power_textures[card_power] = card_power_source_tex
 	}
 	
@@ -114,8 +121,12 @@ main :: proc() {
 			
 			sdl.RenderCopy(renderer, card_texture_template, nil, nil)
 			
+			if card_suit == .hearts || card_suit == .diamonds {
+				sdl.SetTextureColorMod(power_textures[card_power], 255, 0, 0)
+			}
 			sdl.RenderCopy  (renderer, power_textures[card_power], nil, &sdl.Rect{top_number_pos.x,    top_number_pos.y,    symbol_size, symbol_size})
 			sdl.RenderCopyEx(renderer, power_textures[card_power], nil, &sdl.Rect{bottom_number_pos.x, bottom_number_pos.y, symbol_size, symbol_size}, 180, nil, nil)
+			sdl.SetTextureColorMod(power_textures[card_power], 0, 0, 0)
 			
 			sdl.RenderCopy  (renderer, suit_textures[card_suit], nil, &sdl.Rect{top_suit_pos.x,    top_suit_pos.y,    symbol_size, symbol_size})
 			sdl.RenderCopyEx(renderer, suit_textures[card_suit], nil, &sdl.Rect{bottom_suit_pos.x, bottom_suit_pos.y, symbol_size, symbol_size}, 180, nil, nil)
@@ -157,8 +168,8 @@ main :: proc() {
 	goal_spots[3].rect = sdl.Rect{goal_spots[2].rect.x + 10 + card_size.w, 40, card_size.w, card_size.h}
 	
 	
-	cards : [256]Card 
-	draw_queue : [256]int 
+	cards : [256]Card
+	draw_queue : [256]int
 	card_count := 0
 	
 	stacked_card_offset := i32(f32(card_size.h) * NEXT_CARD_Y_OFFSET)
@@ -283,9 +294,6 @@ main :: proc() {
 				for o_index := card_count - 1; o_index >= 0; o_index -= 1 {
 					card := &cards[draw_queue[o_index]]
 					if sdl.PointInRect(&sdl.Point{mouse_x, mouse_y}, &card.rect) && !card.is_on_goal {
-						
-						
-						
 						grabbed_card_index = draw_queue[o_index]
 						cards[grabbed_card_index].last_rect = cards[grabbed_card_index].rect
 						is_grabbing_card = true
