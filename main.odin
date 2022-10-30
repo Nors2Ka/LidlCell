@@ -33,7 +33,7 @@ Card :: struct {
 	suit: CardSuits,
 	
 	is_on_goal: bool,
-	is_on_base_spot: bool,
+	is_on_cell: bool,
 	
 	under_index, over_index: CardIndex,
 	rect, last_rect: sdl.Rect,
@@ -41,8 +41,9 @@ Card :: struct {
 	texture_index: int,
 }
 
-BaseSpot :: struct {
+Cell :: struct {
 	over_index: CardIndex,
+	single_spot: bool,
 	rect: sdl.Rect,
 }
 
@@ -51,6 +52,21 @@ GoalSpot :: struct {
 	held_power: int,
 	held_suit: CardSuits,
 	rect: sdl.Rect,
+}
+
+// Returns true for black
+get_suit_color :: proc(suit: CardSuits) -> bool {
+	return (suit == .spades || suit == .clubs)
+}
+
+// Returns true if suits are different
+comp_suits :: proc(suit_1: CardSuits, suit_2: CardSuits) -> bool {
+	return get_suit_color(suit_1) ~ get_suit_color(suit_2)
+}
+
+// Returns true if suits are different
+comp_card_suits :: proc(card_1: ^Card, card_2: ^Card) -> bool {
+	return comp_suits(card_1.suit, card_2.suit)
 }
 
 to_card_index :: proc(power: CardPowers, suit: CardSuits) -> int {
@@ -74,7 +90,7 @@ main :: proc() {
 	sdl.Init(sdl.INIT_VIDEO)
 	
 	// window_flags : sdl.WindowFlags
-	window := sdl.CreateWindow("Title", sdl.WINDOWPOS_CENTERED, sdl.WINDOWPOS_CENTERED, 1680, 1050, sdl.WindowFlags{})
+	window := sdl.CreateWindow("Title", sdl.WINDOWPOS_CENTERED, sdl.WINDOWPOS_CENTERED, 1280, 1280, sdl.WindowFlags{})
 	renderer := sdl.CreateRenderer(window, -1, sdl.RENDERER_PRESENTVSYNC | sdl.RENDERER_ACCELERATED)
 	
 	card_surface_template := sdl.LoadBMP("data\\card_face_template.bmp")
@@ -104,8 +120,8 @@ main :: proc() {
 		card_power_name := strings.clone_to_cstring(fmt.tprintf("%spower_%s.bmp", base_file_path, card_power), context.temp_allocator)
 		card_power_surf := sdl.LoadBMP(card_power_name)
 		pixels := ([^]u32)(card_power_surf.pixels)[:(card_power_surf.w * card_power_surf.h)]
-		for _, idx in pixels {
-			pixels[idx] = pixels[idx] | 0b1111_1111_1111_1111_1111_1111
+		for pixel in &pixels {
+			pixel = pixel | 0b1111_1111_1111_1111_1111_1111
 			// fmt.printf("%v ", pixels[idx] >> 24)
 		}
 		card_power_source_tex := sdl.CreateTextureFromSurface(renderer, card_power_surf)
@@ -122,7 +138,7 @@ main :: proc() {
 			sdl.RenderCopy(renderer, card_texture_template, nil, nil)
 			
 			if card_suit == .hearts || card_suit == .diamonds {
-				sdl.SetTextureColorMod(power_textures[card_power], 255, 0, 0)
+				sdl.SetTextureColorMod(power_textures[card_power], 220, 0, 0)
 			}
 			sdl.RenderCopy  (renderer, power_textures[card_power], nil, &sdl.Rect{top_number_pos.x,    top_number_pos.y,    symbol_size, symbol_size})
 			sdl.RenderCopyEx(renderer, power_textures[card_power], nil, &sdl.Rect{bottom_number_pos.x, bottom_number_pos.y, symbol_size, symbol_size}, 180, nil, nil)
@@ -136,28 +152,33 @@ main :: proc() {
 	}
 	sdl.SetRenderTarget(renderer, nil)
 	
-	base_spot_texture := sdl.CreateTextureFromSurface(renderer, sdl.LoadBMP("data\\new_base_spot.bmp"))
+	cell_texture := sdl.CreateTextureFromSurface(renderer, sdl.LoadBMP("data\\new_base_spot.bmp"))
 	goal_spot_texture := sdl.CreateTextureFromSurface(renderer, sdl.LoadBMP("data\\new_goal_spot.bmp"))
 	// --Tech init over--
 	
 	
 	// --Game init--
-	base_spots : [128]BaseSpot
-	base_spot_count := 11
+	cells : [128]Cell
+	cell_count := 11
 	
-	base_spots[0].rect = sdl.Rect{20, 250, card_size.w, card_size.h}
-	base_spots[1].rect = sdl.Rect{base_spots[0].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
-	base_spots[2].rect = sdl.Rect{base_spots[1].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
-	base_spots[3].rect = sdl.Rect{base_spots[2].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
-	base_spots[4].rect = sdl.Rect{base_spots[3].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
-	base_spots[5].rect = sdl.Rect{base_spots[4].rect.x + 40 + card_size.w, base_spots[0].rect.y, card_size.w, card_size.h}
+	cells[0].rect = sdl.Rect{20, 250, card_size.w, card_size.h}
+	cells[1].rect = sdl.Rect{cells[0].rect.x + 40 + card_size.w, cells[0].rect.y, card_size.w, card_size.h}
+	cells[2].rect = sdl.Rect{cells[1].rect.x + 40 + card_size.w, cells[0].rect.y, card_size.w, card_size.h}
+	cells[3].rect = sdl.Rect{cells[2].rect.x + 40 + card_size.w, cells[0].rect.y, card_size.w, card_size.h}
+	cells[4].rect = sdl.Rect{cells[3].rect.x + 40 + card_size.w, cells[0].rect.y, card_size.w, card_size.h}
+	cells[5].rect = sdl.Rect{cells[4].rect.x + 40 + card_size.w, cells[0].rect.y, card_size.w, card_size.h}
 	
-	base_spots[6].rect  = sdl.Rect{20, 40, card_size.w, card_size.h}
-	base_spots[7].rect  = sdl.Rect{base_spots[6].rect.x + 10 + card_size.w, base_spots[6].rect.y, card_size.w, card_size.h}
-	base_spots[8].rect  = sdl.Rect{base_spots[7].rect.x + 10 + card_size.w, base_spots[6].rect.y, card_size.w, card_size.h}
-	base_spots[9].rect  = sdl.Rect{base_spots[8].rect.x + 10 + card_size.w, base_spots[6].rect.y, card_size.w, card_size.h}
-	base_spots[10].rect = sdl.Rect{base_spots[9].rect.x + 10 + card_size.w, base_spots[6].rect.y, card_size.w, card_size.h}
+	cells[6].rect  = sdl.Rect{20, 40, card_size.w, card_size.h}
+	cells[7].rect  = sdl.Rect{cells[6].rect.x + 10 + card_size.w, cells[6].rect.y, card_size.w, card_size.h}
+	cells[8].rect  = sdl.Rect{cells[7].rect.x + 10 + card_size.w, cells[6].rect.y, card_size.w, card_size.h}
+	cells[9].rect  = sdl.Rect{cells[8].rect.x + 10 + card_size.w, cells[6].rect.y, card_size.w, card_size.h}
+	cells[10].rect = sdl.Rect{cells[9].rect.x + 10 + card_size.w, cells[6].rect.y, card_size.w, card_size.h}
 	
+	cells[6].single_spot = true
+	cells[7].single_spot = true
+	cells[8].single_spot = true
+	cells[9].single_spot = true
+	cells[10].single_spot = true
 	
 	goal_spots : [128]GoalSpot
 	goal_spot_count := 4
@@ -200,17 +221,17 @@ main :: proc() {
 		new_card.texture_index = shuffle
 		
 		// Really need to yoink this out to a function
-		target_base_spot := index % 6
-		base := &base_spots[target_base_spot]
-		if (base.over_index == nil) {
-			new_card.rect.x = base.rect.x
-			new_card.rect.y = base.rect.y
+		target_cell := index % 6
+		cell := &cells[target_cell]
+		if (cell.over_index == nil) {
+			new_card.rect.x = cell.rect.x
+			new_card.rect.y = cell.rect.y
 			
-			new_card.under_index = target_base_spot
-			new_card.is_on_base_spot = true
-			base.over_index = card_count
+			new_card.under_index = target_cell
+			new_card.is_on_cell = true
+			cell.over_index = card_count
 		} else {
-			next_index := base.over_index
+			next_index := cell.over_index
 			for {
 				next_card := &cards[next_index.(int)]
 				new_card.under_index = next_index.(int)
@@ -265,8 +286,8 @@ main :: proc() {
 					}
 					case .R: {
 						card_count = 0
-						for b_idx in 0..<base_spot_count {
-							base_spots[b_idx].over_index = nil
+						for b_idx in 0..<cell_count {
+							cells[b_idx].over_index = nil
 						}
 						for g_idx in 0..<goal_spot_count {
 							goal_spots[g_idx].over_index = nil
@@ -291,9 +312,25 @@ main :: proc() {
 		// -- Game logic START --
 		if mouse_state != 0 {
 			if !is_grabbing_card { // Mouse1 pressed while NOT holding a card
-				for o_index := card_count - 1; o_index >= 0; o_index -= 1 {
+				card_selection_loop: for o_index := card_count - 1; o_index >= 0; o_index -= 1 {
 					card := &cards[draw_queue[o_index]]
 					if sdl.PointInRect(&sdl.Point{mouse_x, mouse_y}, &card.rect) && !card.is_on_goal {
+						// Checks if the stack of cards is legal
+						{
+							previous_card := card
+							for {
+								next_card_index, next_card_exists := previous_card.over_index.(int)
+								if next_card_exists {
+									next_card := &cards[next_card_index]
+									if (next_card.power == CardPowers(int(previous_card.power) - 1)) && comp_card_suits(previous_card, next_card) {
+										previous_card = next_card
+									} else {
+										break card_selection_loop
+									}
+								} else {break}
+							}
+						}
+						
 						grabbed_card_index = draw_queue[o_index]
 						cards[grabbed_card_index].last_rect = cards[grabbed_card_index].rect
 						is_grabbing_card = true
@@ -348,21 +385,22 @@ main :: proc() {
 				valid_dropoff_found := false
 				found_under_index: int
 				found_new_position := grabbed_card.rect
-				found_is_base_spot := false
+				found_is_cell := false
 				found_is_goal := false
 				
 				search_for_dropoff: {
-					// Base spot
-					for b_index in 0..<base_spot_count {
-						base := &base_spots[b_index]
-						is_in_rect := sdl.PointInRect(&mouse_point, &base.rect)
-						if is_in_rect == true && base.over_index == nil {
-							base.over_index = grabbed_card_index
+					// Cell
+					for b_index in 0..<cell_count {
+						cell := &cells[b_index]
+						if cell.single_spot && grabbed_card.over_index != nil {continue}
+						is_in_rect := sdl.PointInRect(&mouse_point, &cell.rect)
+						if is_in_rect == true && cell.over_index == nil {
+							cell.over_index = grabbed_card_index
 							
-							found_is_base_spot = true
+							found_is_cell = true
 							found_under_index = b_index
-							found_new_position.x = base.rect.x
-							found_new_position.y = base.rect.y
+							found_new_position.x = cell.rect.x
+							found_new_position.y = cell.rect.y
 							
 							valid_dropoff_found = true
 							break search_for_dropoff
@@ -396,7 +434,9 @@ main :: proc() {
 					for c_index in 0..<card_count {
 						if c_index != grabbed_card_index {
 							card := &cards[c_index]
-							if card.is_on_goal || card.over_index != nil {continue}
+							if card.is_on_goal || card.over_index != nil || !comp_card_suits(card, grabbed_card) {continue}
+							if card.is_on_cell && cells[card.under_index.(int)].single_spot {continue}
+							
 							is_in_rect := sdl.PointInRect(&mouse_point, &card.rect)
 							if is_in_rect == true && int(grabbed_card.power) + 1 == int(card.power) {
 								card.over_index = grabbed_card_index
@@ -414,18 +454,18 @@ main :: proc() {
 				}
 				
 				if valid_dropoff_found {
-					if grabbed_card.is_on_base_spot {
-						base_spots[grabbed_card.under_index.(int)].over_index = nil
-						grabbed_card.is_on_base_spot = false
+					if grabbed_card.is_on_cell {
+						cells[grabbed_card.under_index.(int)].over_index = nil
+						grabbed_card.is_on_cell = false
 					} else if grabbed_card.under_index != nil {
 						cards[grabbed_card.under_index.(int)].over_index = nil
 					}
 					
 					grabbed_card.rect = found_new_position
 					grabbed_card.under_index = found_under_index
-					grabbed_card.is_on_base_spot = found_is_base_spot
+					grabbed_card.is_on_cell = found_is_cell
 					grabbed_card.is_on_goal = found_is_goal
-					assert(!(found_is_base_spot && found_is_goal))
+					assert(!(found_is_cell && found_is_goal))
 				} else {
 					grabbed_card.rect = grabbed_card.last_rect
 				}
@@ -456,12 +496,14 @@ main :: proc() {
 		sdl.RenderClear(renderer)
 		
 		// Selection
+		if get_suit_color(card_creation_selection.suit) {sdl.SetTextureColorMod(power_textures[card_creation_selection.power], 0, 0, 0)}
+		else {sdl.SetTextureColorMod(power_textures[card_creation_selection.power], 220, 0, 0)}
 		sdl.RenderCopy(renderer, power_textures[card_creation_selection.power], nil, &sdl.Rect{0,  0, symbol_size, symbol_size})
 		sdl.RenderCopy(renderer, suit_textures[card_creation_selection.suit],   nil, &sdl.Rect{35, 0, symbol_size, symbol_size})
 		
-		// Base Spots
-		for index := 0; index < base_spot_count; index += 1 {
-			sdl.RenderCopy(renderer, base_spot_texture, nil, &base_spots[index].rect)
+		// Cell Spots
+		for index := 0; index < cell_count; index += 1 {
+			sdl.RenderCopy(renderer, cell_texture, nil, &cells[index].rect)
 		}
 		
 		// Goals
