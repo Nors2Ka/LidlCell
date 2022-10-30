@@ -5,14 +5,14 @@ import "core:math/rand"
 import "core:strings"
 import sdl "vendor:sdl2"
 
-NEXT_CARD_Y_OFFSET :: 0.15 // What happens here really? Auto-cast?
+NEXT_CARD_Y_OFFSET :: 0.22 // What happens here really? Auto-cast?
 
-CARD_POWER_COUNT :: 14
+CARD_POWER_COUNT :: 13
 CARD_SUIT_COUNT  :: 4
 
 CardPowers :: enum u8{
 	ace,
-	one, two, three, four, five, six, seven, eight, nine, ten,
+	two, three, four, five, six, seven, eight, nine, ten,
 	jack, queen, king,
 }
 
@@ -102,7 +102,7 @@ main :: proc() {
 	
 	symbol_size       :i32= 35
 	top_number_pos    := sdl.Point{85, 0}
-	top_suit_pos      := sdl.Point{85, 35}
+	top_suit_pos      := sdl.Point{85, 30}
 	bottom_number_pos := sdl.Point{card_size.w - top_number_pos.x - symbol_size, card_size.h - top_number_pos.y - symbol_size}
 	bottom_suit_pos   := sdl.Point{card_size.w - top_suit_pos.x - symbol_size, card_size.h - top_suit_pos.y - symbol_size}
 	
@@ -208,7 +208,7 @@ main :: proc() {
 	// -- Board init --
 	
 	// card_count = 52
-	order_shuffle : [56]int
+	order_shuffle : [CARD_POWER_COUNT * CARD_SUIT_COUNT]int
 	for _, index in order_shuffle { order_shuffle[index] = index }
 	rand.shuffle(order_shuffle[:])
 	rand.shuffle(order_shuffle[:])
