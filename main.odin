@@ -10,6 +10,8 @@ NEXT_CARD_Y_OFFSET :: 0.22 // What happens here really? Auto-cast?
 CARD_POWER_COUNT :: 13
 CARD_SUIT_COUNT  :: 4
 
+RED_DISCOLOR :: 170
+
 CardPowers :: enum u8{
 	ace,
 	two, three, four, five, six, seven, eight, nine, ten,
@@ -115,6 +117,7 @@ main :: proc() {
 		card_suit_name := strings.clone_to_cstring(fmt.tprintf("%ssuit_%s.bmp", base_file_path, card_suit), context.temp_allocator)
 		card_suit_source_tex := sdl.CreateTextureFromSurface(renderer, sdl.LoadBMP(card_suit_name))
 		suit_textures[card_suit] = card_suit_source_tex
+		sdl.SetTextureColorMod(suit_textures[card_suit], RED_DISCOLOR, 0, 0)
 	}
 	for card_power in CardPowers {
 		card_power_name := strings.clone_to_cstring(fmt.tprintf("%spower_%s.bmp", base_file_path, card_power), context.temp_allocator)
@@ -138,7 +141,7 @@ main :: proc() {
 			sdl.RenderCopy(renderer, card_texture_template, nil, nil)
 			
 			if card_suit == .hearts || card_suit == .diamonds {
-				sdl.SetTextureColorMod(power_textures[card_power], 220, 0, 0)
+				sdl.SetTextureColorMod(power_textures[card_power], RED_DISCOLOR, 0, 0)
 			}
 			sdl.RenderCopy  (renderer, power_textures[card_power], nil, &sdl.Rect{top_number_pos.x,    top_number_pos.y,    symbol_size, symbol_size})
 			sdl.RenderCopyEx(renderer, power_textures[card_power], nil, &sdl.Rect{bottom_number_pos.x, bottom_number_pos.y, symbol_size, symbol_size}, 180, nil, nil)
@@ -507,7 +510,7 @@ main :: proc() {
 		}
 		auto_card_moving_loop: for card_index in 0..<card_count {
 			card := &cards[card_index]
-			if card.over_index != nil || card.is_on_cell || card.is_on_goal {continue}
+			if card.over_index != nil || card.is_on_goal {continue}
 			
 			if card.power == .ace || card.power == .two {
 				for goal_index in 0..<goal_spot_count {
