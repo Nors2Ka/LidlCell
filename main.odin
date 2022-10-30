@@ -489,6 +489,75 @@ main :: proc() {
 		if !is_grabbing_card && was_just_grabbing_card {
 			was_just_grabbing_card = false
 		}
+		// !!!!!!!!!!!!!
+		// !!HACK ZONE!!
+		// !!!!!!!!!!!!!
+		// Move cards to the goal spots
+		// @bug: draw order is not updated, too hacky!
+		powers_in_goals : [4]struct{suit: CardSuits, power: CardPowers, exists: bool}
+		for suit in CardSuits {
+			pig := &powers_in_goals[int(suit)]
+			pig.exists = false
+			pig.suit = suit
+			goal := &goal_spots[int(suit)]
+			if goal.over_index != nil {
+				pig.exists = true
+				pig.power = CardPowers(goal.held_power)
+			}
+		}
+		auto_card_moving_loop: for card_index in 0..<card_count {
+			card := &cards[card_index]
+			if card.over_index != nil || card.is_on_cell || card.is_on_goal {continue}
+			
+			if card.power == .ace || card.power == .two {
+				for goal_index in 0..<goal_spot_count {
+					goal := &goal_spots[goal_index]
+					if (goal.over_index == nil && card.power == .ace) || (goal.over_index != nil && goal.held_suit == card.suit) {
+						if card.is_on_cell {
+							cells[card.under_index.(int)].over_index = nil
+							card.is_on_cell = false
+						} else if card.under_index != nil {
+							cards[card.under_index.(int)].over_index = nil
+						}
+						goal.over_index = card_index
+						goal.held_power = int(card.power)
+						goal.held_suit  = card.suit
+						
+						card.rect.x = goal.rect.x
+						card.rect.y = goal.rect.y
+						card.is_on_goal = true
+						break auto_card_moving_loop
+					}
+				}
+			} else {
+				for goal_index in 0..<goal_spot_count {
+					goal := &goal_spots[goal_index]
+					if goal.over_index != nil && (goal.held_suit == card.suit && goal.held_power == int(card.power) - 1) {
+						// Only auto move a card if other color goaled card powers are lower by 2.
+						// e.g. with goal layout of [2S 3C 2H 2D] will auto pull up to and including 4 of blacks
+						for check_goal in &powers_in_goals {
+							if comp_suits(card.suit, check_goal.suit) {
+								if !check_goal.exists || check_goal.power < CardPowers(int(card.power) - 2) {continue auto_card_moving_loop}
+							}
+						}
+						if card.is_on_cell {
+							cells[card.under_index.(int)].over_index = nil
+							card.is_on_cell = false
+						} else if card.under_index != nil {
+							cards[card.under_index.(int)].over_index = nil
+						}
+						goal.over_index = card_index
+						goal.held_power = int(card.power)
+						
+						card.rect.x = goal.rect.x
+						card.rect.y = goal.rect.y
+						card.is_on_goal = true
+						break auto_card_moving_loop
+					}
+				}
+			}
+		}
+		
 		// -- Game logic END --
 		
 		// -- Render --
