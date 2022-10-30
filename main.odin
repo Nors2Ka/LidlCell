@@ -529,6 +529,15 @@ main :: proc() {
 						card.rect.x = goal.rect.x
 						card.rect.y = goal.rect.y
 						card.is_on_goal = true
+						
+						for card_in_queue_index, number_in_queue in draw_queue {
+							if card_in_queue_index == card_index {
+								for reshufle_index in number_in_queue..<card_count - 1 {
+									draw_queue[reshufle_index] = draw_queue[reshufle_index + 1]
+								}
+								draw_queue[card_count - 1] = card_in_queue_index
+							}
+						}
 						break auto_card_moving_loop
 					}
 				}
@@ -555,6 +564,16 @@ main :: proc() {
 						card.rect.x = goal.rect.x
 						card.rect.y = goal.rect.y
 						card.is_on_goal = true
+						
+						for card_in_queue_index, number_in_queue in draw_queue {
+							if card_in_queue_index == card_index {
+								for reshufle_index in number_in_queue..<card_count - 1 {
+									draw_queue[reshufle_index] = draw_queue[reshufle_index + 1]
+								}
+								draw_queue[card_count - 1] = card_in_queue_index
+							}
+						}
+						
 						break auto_card_moving_loop
 					}
 				}
