@@ -5,7 +5,7 @@ import "core:math/rand"
 import "core:strings"
 import sdl "vendor:sdl2"
 
-NEXT_CARD_Y_OFFSET :: 0.22 // What happens here really? Auto-cast?
+NEXT_CARD_Y_OFFSET :: 0.22
 
 CARD_POWER_COUNT :: 13
 CARD_SUIT_COUNT  :: 4
@@ -17,12 +17,6 @@ CardPowers :: enum u8{
 	two, three, four, five, six, seven, eight, nine, ten,
 	jack, queen, king,
 }
-
-// CardNames :: []string{
-// 	"ace",
-// 	"1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-// 	"jack", "queen", "king",
-// }
 
 CardSuits :: enum u8{
 	spades, clubs, diamonds, hearts,
@@ -81,18 +75,10 @@ from_card_index :: proc(value: int) -> (CardPowers, CardSuits) {
 	return CardPowers(power), CardSuits(suit)
 }
 
-// This is just '%%' operator
-// wrap_range :: proc(value: int, range: int) -> int {
-// 	out := value % range
-// 	if out < 0 {out = range + out}
-// 	return out
-// }
-
 main :: proc() {
 	sdl.Init(sdl.INIT_VIDEO)
 	
-	// window_flags : sdl.WindowFlags
-	window := sdl.CreateWindow("Title", sdl.WINDOWPOS_CENTERED, sdl.WINDOWPOS_CENTERED, 1280, 1280, sdl.WindowFlags{})
+	window := sdl.CreateWindow("LidlCell", sdl.WINDOWPOS_CENTERED, sdl.WINDOWPOS_CENTERED, 1280, 1280, sdl.WindowFlags{})
 	renderer := sdl.CreateRenderer(window, -1, sdl.RENDERER_PRESENTVSYNC | sdl.RENDERER_ACCELERATED)
 	
 	card_surface_template := sdl.LoadBMP("data\\card_face_template.bmp")
@@ -108,19 +94,18 @@ main :: proc() {
 	bottom_number_pos := sdl.Point{card_size.w - top_number_pos.x - symbol_size, card_size.h - top_number_pos.y - symbol_size}
 	bottom_suit_pos   := sdl.Point{card_size.w - top_suit_pos.x - symbol_size, card_size.h - top_suit_pos.y - symbol_size}
 	
-	base_file_path := "data\\"
 	new_card_textures : [56]^sdl.Texture
 	suit_textures  := make(map[CardSuits]^sdl.Texture)
 	power_textures := make(map[CardPowers]^sdl.Texture)
 	// Freeing surface and texture memory saves nothing, as far as I'm concerned, better to leave this clean.
 	for card_suit in CardSuits {
-		card_suit_name := strings.clone_to_cstring(fmt.tprintf("%ssuit_%s.bmp", base_file_path, card_suit), context.temp_allocator)
+		card_suit_name := strings.clone_to_cstring(fmt.tprintf("data\\suit_%s.bmp", card_suit), context.temp_allocator)
 		card_suit_source_tex := sdl.CreateTextureFromSurface(renderer, sdl.LoadBMP(card_suit_name))
 		suit_textures[card_suit] = card_suit_source_tex
 		sdl.SetTextureColorMod(suit_textures[card_suit], RED_DISCOLOR, 0, 0)
 	}
 	for card_power in CardPowers {
-		card_power_name := strings.clone_to_cstring(fmt.tprintf("%spower_%s.bmp", base_file_path, card_power), context.temp_allocator)
+		card_power_name := strings.clone_to_cstring(fmt.tprintf("data\\power_%s.bmp", card_power), context.temp_allocator)
 		card_power_surf := sdl.LoadBMP(card_power_name)
 		pixels := ([^]u32)(card_power_surf.pixels)[:(card_power_surf.w * card_power_surf.h)]
 		for pixel in &pixels {
@@ -209,8 +194,6 @@ main :: proc() {
 	card_creation_selection : struct {power: CardPowers, suit: CardSuits}
 	
 	// -- Board init --
-	
-	// card_count = 52
 	order_shuffle : [CARD_POWER_COUNT * CARD_SUIT_COUNT]int
 	for _, index in order_shuffle { order_shuffle[index] = index }
 	rand.shuffle(order_shuffle[:])
@@ -223,7 +206,6 @@ main :: proc() {
 		new_card.power, new_card.suit = from_card_index(shuffle)
 		new_card.texture_index = shuffle
 		
-		// Really need to yoink this out to a function
 		target_cell := index % 6
 		cell := &cells[target_cell]
 		if (cell.over_index == nil) {
@@ -247,12 +229,10 @@ main :: proc() {
 		}
 		new_card.rect.w = card_size.w
 		new_card.rect.h = card_size.h
-		// new_card.rect = sdl.Rect{1600 - i32(index * 40), 100, card_size.w, card_size.h}
 		draw_queue[card_count] = card_count
 		cards[card_count] = new_card
 		card_count += 1
 	}
-	
 	
 	event : sdl.Event
 	running : sdl.bool = true
@@ -274,7 +254,6 @@ main :: proc() {
 						cards[card_count] = new_card
 						card_count += 1
 					}
-					
 					case .UP: {
 						card_creation_selection.power = CardPowers((int(card_creation_selection.power) + 1) %% CARD_POWER_COUNT)
 					}
@@ -496,7 +475,6 @@ main :: proc() {
 		// !!HACK ZONE!!
 		// !!!!!!!!!!!!!
 		// Move cards to the goal spots
-		// @bug: draw order is not updated, too hacky!
 		powers_in_goals : [4]struct{suit: CardSuits, power: CardPowers, exists: bool}
 		for suit in CardSuits {
 			pig := &powers_in_goals[int(suit)]
@@ -573,13 +551,11 @@ main :: proc() {
 								draw_queue[card_count - 1] = card_in_queue_index
 							}
 						}
-						
 						break auto_card_moving_loop
 					}
 				}
 			}
 		}
-		
 		// -- Game logic END --
 		
 		// -- Render --
